@@ -6,6 +6,20 @@ policy in `CLAUDE.md` (patch by default, minor/major only when requested).
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-02
+
+### Added
+- Phase 0 render spike: `/spike.html` renders a promo fully in the browser
+  (WebGL bass-reactive blur in a Worker → WebCodecs H.264 + AAC/Opus → MP4
+  via Mediabunny), with generated test media and `npm run bench` to drive it
+  in Chrome, Chromium, WebKit and Firefox.
+- `docs/benchmarks.md`: 60 s 1080×1920 promo renders in 8–10 s in
+  Chrome/Safari/Firefox vs 33 s in the desktop app; WebKit bitrate and
+  colour-range follow-ups recorded.
+
+## [0.1.0] - 2026-10-02
+
+
 ### Added
 - Project scaffold: Vite + Svelte 5 + TypeScript, Vitest, Playwright
   (Chromium/WebKit/Firefox), ESLint, svelte-check, commitlint + husky.
