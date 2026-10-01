@@ -47,6 +47,14 @@ def _desktop_commit() -> str:
         return "unknown"
 
 
+def _library_versions() -> dict:
+    import cv2
+    import PIL
+    import scipy
+
+    return {"opencv": cv2.__version__, "pillow": PIL.__version__, "numpy": np.__version__, "scipy": scipy.__version__}
+
+
 def _synth_track(path: Path, seconds: float, drop_at: float, bass_hz: float, channels: int, seed: int) -> None:
     """Quiet hats/pad before `drop_at`, then a loud pulsing bass line."""
     rng = np.random.default_rng(seed)
@@ -58,6 +66,27 @@ def _synth_track(path: Path, seconds: float, drop_at: float, bass_hz: float, cha
     mono = np.clip(hats + pad + bass, -1, 1)
     data = np.stack([mono, mono * 0.9], axis=1) if channels == 2 else mono
     sf.write(path, data, AUDIO_RATE, subtype="PCM_16")
+
+
+def filter_fixtures() -> dict:
+    """Butterworth SOS coefficients and a zero-phase filtering reference (scipy)."""
+    from scipy.signal import butter, sosfiltfilt
+
+    rates = {}
+    for rate in (8000, 11025, 22050, 44100, 48000, 96000):
+        sos = butter(4, min(core.BASS_CUTOFF_HZ / (rate / 2), 0.99), btype="low", output="sos")
+        rates[str(rate)] = sos.tolist()
+    t = np.arange(400) / 11025
+    signal = 0.5 * np.sin(2 * np.pi * 60 * t) + 0.3 * np.sin(2 * np.pi * 2000 * t) + np.linspace(-0.2, 0.2, 400)
+    sos = np.array(rates["11025"])
+    return {
+        "butterSos": rates,
+        "sosfiltfilt": {
+            "sampleRate": 11025,
+            "input": [round(float(v), 12) for v in signal],
+            "output": [float(v) for v in sosfiltfilt(sos, signal)],
+        },
+    }
 
 
 def audio_fixtures() -> dict:
@@ -122,13 +151,13 @@ def effect_fixtures() -> dict:
 
     for strength in (0.04, 0.5, 1.0):
         case(f"radial-blur-{strength}", "apply_radial_blur", {"strength": strength},
-             effects.apply_radial_blur(frame, strength), "tolerance")
+             effects.apply_radial_blur(frame, strength), "exact")
     for angle in (0.0, -30.0, 45.0):
         case(f"rotate-{angle}", "apply_rotate", {"angleDegrees": angle, "background": "background"},
-             effects.apply_rotate(frame, angle, background), "tolerance")
+             effects.apply_rotate(frame, angle, background), "exact")
     for opacity in (0.0, 0.5, 1.0):
         case(f"overlay-{opacity}", "apply_overlay", {"opacity": opacity, "overlay": "overlay-rgba"},
-             effects.apply_overlay(frame, overlay_rgba, opacity), "tolerance")
+             effects.apply_overlay(frame, overlay_rgba, opacity), "exact")
     for amount in (0.0, 0.5, 1.0):
         case(f"vhs-{amount}", "apply_vhs", {"amount": amount, "time": 1.0},
              effects.apply_vhs(frame, amount, 1.0), "exact" if amount == 0 else "visual-only")
@@ -142,14 +171,15 @@ def effect_fixtures() -> dict:
     case("chain-overlay-blur-rotate-t1.5", "apply_effect_chain",
          {"time": 1.5, "order": list(chain.order), "overlay": {"enabled": True, "opacity": 0.75},
           "bassBlur": {"enabled": True}, "bassStrength": 0.8, "rotate": {"enabled": True, "rpm": 33.3}},
-         effects.apply_effect_chain(frame, 1.5, chain, background, 0.8, overlay_rgba), "tolerance")
+         effects.apply_effect_chain(frame, 1.5, chain, background, 0.8, overlay_rgba), "exact")
 
     fitted = effects.fit_overlay_frame(overlay_rgba[12:36, 16:48], (64, 48))
-    case("fit-overlay-32x24-into-64x48", "fit_overlay_frame", {"size": [64, 48]}, fitted, "tolerance")
+    case("fit-overlay-32x24-into-64x48", "fit_overlay_frame", {"size": [64, 48]}, fitted, "exact")
     return {
         "notes": (
-            "parity=exact: TS output must equal the PNG byte-for-byte in RGB. "
-            "parity=tolerance: max per-channel abs diff <= 3 and mean abs diff <= 1 (resampling differs). "
+            "parity=exact: the TS CPU reference must equal the PNG byte-for-byte (achieved for every "
+            "deterministic effect, including OpenCV resize/warpAffine and Pillow Lanczos). "
+            "GPU (WebGL) implementations are compared to the CPU reference with a tolerance instead (spec 12). "
             "parity=visual-only: depends on numpy's PCG64 RNG stream; TS uses its own PRNG, so only "
             "assert shape and that the frame changed."
         ),
@@ -177,10 +207,30 @@ def pure_function_fixtures(tmp: Path) -> dict:
         for policy in ("skip", "overwrite", "rename")
     }
 
+    template_cases = []
+    promo = [
+        "{track} - Promo Snippet", "{number:02d} {track}", "{track}-{number}", "{{literal}} {track}",
+        "{missing}", "{track", "track}", "{}", "{0}", "{track!r}", "{number:>4}", "{track:.3}", "",
+    ]
+    for template in promo:
+        try:
+            template_cases.append({"template": template, "fields": {"track": "My Song", "number": 7},
+                                   "output": template.format(track="My Song", number=7)})
+        except (KeyError, ValueError, IndexError) as exc:
+            template_cases.append({"template": template, "fields": {"track": "My Song", "number": 7},
+                                   "error": type(exc).__name__})
+    for template in ("{source} - {title}", "{number:03d}_{title}", "{source}/{title}", "{track}"):
+        fields = {"source": "Live Set", "title": "Clip 01", "number": 3}
+        try:
+            template_cases.append({"template": template, "fields": fields, "output": template.format(**fields)})
+        except (KeyError, ValueError, IndexError) as exc:
+            template_cases.append({"template": template, "fields": fields, "error": type(exc).__name__})
+
     versions = [("1.0.0", "v1.0.1"), ("1.0.0", "v1.0.0"), ("1.0.0", "release-12"),
                 ("1.2.3", "1.10.0"), ("2.0.0", "v1.9.9"), ("1.0.0", "v1.0")]
     return {
         "parseTimestamp": parse_cases,
+        "templates": template_cases,
         "formatTimestamp": [
             {"seconds": s, "text": core.format_timestamp(s)} for s in (0, 0.4, 0.5, 1.5, 59.6, 195, 3599.5, 3723.5, -5)
         ],
@@ -222,8 +272,14 @@ def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as scratch:
         manifest = {
-            "generatedFrom": {"desktopVersion": __version__, "desktopCommit": _desktop_commit()},
+            "generatedFrom": {
+                "desktopVersion": __version__,
+                "desktopCommit": _desktop_commit(),
+                # Exact parity depends on these: e.g. OpenCV >= 4.11 changed warpAffine's kernels.
+                "libraries": _library_versions(),
+            },
             "audio": audio_fixtures(),
+            "filters": filter_fixtures(),
             "effects": effect_fixtures(),
             "pure": pure_function_fixtures(Path(scratch)),
         }

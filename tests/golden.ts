@@ -7,6 +7,7 @@ export type Golden = {
   generatedFrom: { desktopVersion: string; desktopCommit: string };
   pure: {
     parseTimestamp: Array<{ input: string; seconds?: number; error?: string }>;
+    templates: Array<{ template: string; fields: Record<string, string | number>; output?: string; error?: string }>;
     formatTimestamp: Array<{ seconds: number; text: string }>;
     safeFilename: Array<{ input: string; output: string }>;
     resolveOutput: { existingFiles: string[]; requested: string; results: Record<string, string | null> };
@@ -18,9 +19,30 @@ export type Golden = {
     videoOutputFormats: string[];
     versionTuple: Record<string, [number, number, number] | null>;
     isNewerVersion: Array<{ current: string; candidate: string; newer: boolean }>;
+    artworkCanvas: { nativeOdd801x1201: number[]; wide400x200IntoVertical108x192: number[] };
   };
-  audio: unknown;
-  effects: unknown;
+  audio: {
+    tracks: Array<{
+      file: string;
+      sampleRate: number;
+      channels: number;
+      seconds: number;
+      synthesizedDropAt: number;
+      detectDropTime: number;
+      detectDropStartWithLeadIn2s: number;
+      bassEnvelope: { fps: number; duration: number; values: number[] };
+    }>;
+  };
+  filters: {
+    butterSos: Record<string, number[][]>;
+    sosfiltfilt: { sampleRate: number; input: number[]; output: number[] };
+  };
+  effects: {
+    cases: Array<{ name: string; file: string; fn?: string; params?: Record<string, unknown>; parity?: "exact" | "tolerance" | "visual-only" }>;
+  };
 };
 
 export const golden = JSON.parse(readFileSync(url, "utf-8")) as Golden;
+
+/** Absolute URL of a file inside fixtures/golden/. */
+export const goldenFile = (relative: string) => new URL(`../fixtures/golden/${relative}`, import.meta.url);

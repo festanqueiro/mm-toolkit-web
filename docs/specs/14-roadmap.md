@@ -16,9 +16,9 @@
 
 - [x] Scaffold: Vite + TS + Svelte 5 + Vitest + Playwright + ESLint + commitlint/husky + CI + Pages deploy.
 - [x] `engine/` pure ports: time, naming, media-kind, version. Golden `pure.*` green.
-- [ ] Template formatter (`{track}`, `{number:02d}` …).
-- [ ] Audio analysis: filters, drop detection, envelope. Golden `audio.*` green.
-- [ ] CPU effect reference. Golden `effects.*` green.
+- [x] Template formatter (Python `str.format` subset; golden `pure.templates`).
+- [x] Audio analysis: filters, drop detection, envelope. Golden `audio.*` green (drop times exact, envelope 5e-7).
+- [x] CPU effect reference. Golden `effects.*` green: **bit-exact** for every deterministic effect.
 - [ ] App shell: tabs, routing, theming, Settings (persisted), capability detection, About.
 - [ ] I/O: FileRef, handle persistence, Directory/Download/Zip sinks.
 
