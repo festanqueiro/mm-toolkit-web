@@ -3,6 +3,10 @@
   import { routeFromHash, routes } from "./routes";
   import About from "./tabs/About.svelte";
   import Placeholder from "./tabs/Placeholder.svelte";
+  import Settings from "./tabs/Settings.svelte";
+  import { initApp } from "./state.svelte";
+
+  initApp();
 
   let current = $state(routeFromHash(location.hash));
 
@@ -30,6 +34,8 @@
   <main class="page">
     {#if current.path === "about"}
       <About />
+    {:else if current.path === "settings"}
+      <Settings />
     {:else}
       <Placeholder route={current} />
     {/if}

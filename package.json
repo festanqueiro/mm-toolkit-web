@@ -1,6 +1,6 @@
 {
   "name": "mm-toolkit-web",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": true,
   "description": "MM Toolkit in the browser: promo videos, clip cutting and media conversion, fully client-side.",
   "type": "module",
@@ -31,7 +31,9 @@
     "@types/node": "^24.19.1",
     "eslint": "^10.11.0",
     "eslint-plugin-svelte": "^3.23.0",
+    "fake-indexeddb": "^6.2.5",
     "fast-png": "^8.0.0",
+    "fflate": "^0.8.3",
     "globals": "^17.13.0",
     "husky": "^9.1.7",
     "svelte": "^5.57.1",
@@ -42,6 +44,7 @@
     "vitest": "^5.0.3"
   },
   "dependencies": {
+    "client-zip": "^2.5.1",
     "mediabunny": "^1.61.0"
   }
 }

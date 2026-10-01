@@ -6,6 +6,19 @@ policy in `CLAUDE.md` (patch by default, minor/major only when requested).
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-10-02
+
+### Added
+- Settings stored in IndexedDB with the desktop's key names and defaults.
+- FileRef: file/folder references with persisted handles (Chromium) and
+  permission re-request.
+- Output sinks: write into a chosen folder honouring the desktop conflict
+  policies (numbered copy / overwrite / skip), or stage in private browser
+  storage for download — one file at a time or a single ZIP per batch.
+- Settings tab: default export folder (where supported), notifications,
+  naming templates with a live example and validation, existing-files policy,
+  ZIP batches, output retention, large-file fallback and theme.
+
 ## [0.1.2] - 2026-10-02
 
 ### Added

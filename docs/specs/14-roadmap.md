@@ -19,8 +19,8 @@
 - [x] Template formatter (Python `str.format` subset; golden `pure.templates`).
 - [x] Audio analysis: filters, drop detection, envelope. Golden `audio.*` green (drop times exact, envelope 5e-7).
 - [x] CPU effect reference. Golden `effects.*` green: **bit-exact** for every deterministic effect.
-- [ ] App shell: tabs, routing, theming, Settings (persisted), capability detection, About.
-- [ ] I/O: FileRef, handle persistence, Directory/Download/Zip sinks.
+- [x] App shell: tabs, routing, theming, Settings (persisted), capability detection, About.
+- [x] I/O: FileRef, handle persistence, Directory/Download/Zip sinks.
 
 ## Phase 2 — Video Creator (highest value)
 
