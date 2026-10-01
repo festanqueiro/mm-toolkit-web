@@ -1,19 +1,16 @@
 # 13 — Hosting, CI & Release
 
-## Hosting
+## Hosting — GitHub Pages (ADR-002, decided 2026-10-02)
 
-- **Static files only.** No functions or workers doing media work. (A CDN edge that only serves files is fine.)
-- **Recommended host: Cloudflare Pages** (or Netlify). Both support custom headers via `_headers`, and both work from a **private** GitHub repo on free tiers. GitHub Pages is a poor fit: it can't set COOP/COEP headers, and Pages on private repos needs a paid plan.
-- Headers (only needed for multi-threaded ffmpeg.wasm / `SharedArrayBuffer`):
-
-  ```
-  /*
-    Cross-Origin-Opener-Policy: same-origin
-    Cross-Origin-Embedder-Policy: require-corp   # or "credentialless" (Chromium/Firefox)
-  ```
-
-  With `require-corp`, **every asset must be same-origin or send CORP**. Self-host fonts and the ffmpeg core; no third-party CDNs.
-- **CSP**: `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; img-src 'self' blob: data:; media-src 'self' blob:; connect-src 'self'`. Tighten further where possible.
+- **Static files only.** No functions or workers doing media work.
+- **Host: GitHub Pages** (public repo, free), deployed by the official Actions flow (`actions/upload-pages-artifact` + `actions/deploy-pages`). URL: `https://festanqueiro.github.io/mm-toolkit-web/`. Vite `base` is `/mm-toolkit-web/` when `GITHUB_PAGES=1`.
+- **No custom response headers on Pages.** Consequences:
+  - **No cross-origin isolation**, so no `SharedArrayBuffer`, so **ffmpeg.wasm runs single-threaded**. This only affects the WASM fallback path. WebCodecs, WebGL, Workers, OffscreenCanvas, File System Access, OPFS, IndexedDB, Notifications and service workers all work. Audio-only WASM encodes are fast enough single-threaded; WASM *video* (AVI output, exotic inputs) gets slower.
+  - Optional later: the **`coi-serviceworker`** shim fakes COOP/COEP from a service worker. It causes one reload on first visit, must be merged with the PWA service worker (one SW per scope), and needs every asset to be same-origin or CORP. Add it only if WASM speed proves to matter.
+  - **CSP is shipped as a `<meta http-equiv>` tag**, injected into production builds by `vite.config.ts`: `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; media-src 'self' blob:; connect-src 'self' blob: data:; object-src 'none'; base-uri 'self'`. A meta CSP can't set `frame-ancestors`; accept that.
+- **Routing**: hash routes (`#/converter`), so no rewrite rules are needed.
+- **Limits**: 100 MB per file, ~1 GB per site, soft 100 GB/month bandwidth. The ffmpeg.wasm core (~30 MB) fits. Large ML models (see the Stem Splitter in spec 14) may need splitting or a CORS-enabled CDN.
+- **Self-host every asset** (fonts, ffmpeg core). No third-party CDNs at runtime.
 - **Privacy**: no analytics by default. If ever added, they must never receive file names or contents.
 
 ## Repository conventions (carried over from desktop)
@@ -27,7 +24,7 @@
 ## CI (`.github/workflows/ci.yml`, on PRs into `main`)
 
 1. **Secret scan**: `gitleaks/gitleaks-action@v2` (same as desktop).
-2. **Lint + typecheck**: `eslint`, `tsc --noEmit`.
+2. **Lint + typecheck**: `npm run lint` (ESLint), `npm run check` (svelte-check).
 3. **Unit**: `vitest run` (golden parity included).
 4. **E2E**: Playwright with Chromium, WebKit, Firefox (`npx playwright install --with-deps`).
 5. **Build**: `vite build`. Assert the bundle budget: initial JS ≤ 300 KB gzip, excluding lazily-loaded ffmpeg.wasm.
@@ -36,7 +33,7 @@
 
 1. Build.
 2. Deploy to the static host's production environment.
-3. Create a GitHub Release/tag `v{version}` with the build artefact (zip of `dist/`) and changelog notes.
+3. Create a GitHub Release/tag `v{version}` with generated notes.
 4. Fail if the tag already exists (i.e. the version wasn't bumped). Same guard idea as desktop.
 
-PR previews: Cloudflare Pages preview deployments per branch.
+PR previews: not available on GitHub Pages. Reviewers run `npm run build && npm run preview` locally, or download the CI build artefact.

@@ -8,7 +8,9 @@
 
 The browser edition of [MM Toolkit](https://github.com/festanqueiro/mm-toolkit). It turns tracks into promo videos, cuts precise clips and batch-converts media, with **every byte processed on your own device**. No uploads, no server-side processing, no accounts.
 
-> **Status: pre-development.** This repo holds the specifications, golden test fixtures and assets for the port. No app code yet. Start with [`docs/specs/`](docs/specs/README.md) and the [roadmap](docs/specs/14-roadmap.md).
+> **Status: early development (Phase 1).** The app shell, the first engine ports and CI/deploy are in place; the tools themselves are being built. Start with [`docs/specs/`](docs/specs/README.md) and the [roadmap](docs/specs/14-roadmap.md).
+>
+> **Live:** https://festanqueiro.github.io/mm-toolkit-web/
 
 ## Tools
 
@@ -40,6 +42,11 @@ Details and trade-offs: [`docs/research/browser-feasibility.md`](docs/research/b
 ## Repository layout
 
 ```
+src/
+  engine/         # pure TS media engine (runs in Workers; unit-tested)
+  ui/             # Svelte 5 app shell and tabs
+tests/            # Vitest unit + golden parity tests
+e2e/              # Playwright tests
 docs/
   specs/          # the specifications (start at specs/README.md)
   research/       # browser feasibility analysis
@@ -51,14 +58,16 @@ assets/           # logo, icons, Material Icons (Apache-2.0)
 
 ## Development
 
-Not scaffolded yet. The planned stack is Vite + TypeScript + Vitest + Playwright (see [spec 01](docs/specs/01-architecture.md)). Once scaffolded:
+Stack: Vite + Svelte 5 + TypeScript, Vitest, Playwright (see [spec 01](docs/specs/01-architecture.md)). Requires Node 24.
 
 ```bash
 npm install
-npm run dev        # local dev server
-npm test           # unit + golden parity tests
-npm run test:e2e   # Playwright on Chromium, WebKit, Firefox
-npm run build
+npx playwright install     # once, for E2E browsers
+npm run dev                # local dev server
+npm run lint && npm run check
+npm test                   # unit + golden parity tests
+npm run test:e2e           # Playwright on Chromium, WebKit, Firefox
+npm run build              # production build (GITHUB_PAGES=1 for the Pages base path)
 ```
 
 Refresh the golden fixtures from the desktop repo:
@@ -80,4 +89,4 @@ MM_TOOLKIT_DESKTOP=../record-label-mediatools \
 
 ## License
 
-To be decided before the repository goes public.
+[MIT](LICENSE)
