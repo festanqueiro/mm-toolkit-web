@@ -1,0 +1,51 @@
+.spike {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 24px var(--gutter);
+}
+.muted {
+  color: var(--text-muted);
+}
+fieldset {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  margin: 0 0 14px;
+  display: grid;
+  gap: 10px;
+}
+label {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+button {
+  min-height: 44px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--accent-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+progress {
+  width: 100%;
+}
+pre {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  overflow-x: auto;
+}
+video {
+  max-width: 100%;
+  max-height: 70vh;
+}

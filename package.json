@@ -19,7 +19,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "prepare": "husky"
+    "prepare": "husky",
+    "bench": "playwright test -c playwright.bench.config.ts"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.2.3",
