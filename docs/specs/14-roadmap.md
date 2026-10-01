@@ -6,12 +6,14 @@
 - [ ] Calibrate the **Quality presets** (bpp/QP) against desktop CRF 18 output, side by side.
 - [ ] Confirm AAC `AudioEncoder` availability per browser, plus the WASM AAC fallback timing.
 - [ ] Confirm Mediabunny's container read/write list, and the ffmpeg.wasm LGPL build options (codecs available without x264).
-- [ ] Decide **ADR-001** (UI framework), **ADR-002** (host), **ADR-003** (OGG Vorbis vs Opus), **ADR-004** (keep AVI output?).
+- [x] **ADR-001** UI framework → **Svelte 5**. **ADR-002** host → **GitHub Pages** (public repo). Licence → **MIT**.
+- [ ] Decide **ADR-003** (OGG Vorbis vs Opus) and **ADR-004** (keep AVI output?).
 
 ## Phase 1 — Foundations
 
-- [ ] Scaffold: Vite + TS + Vitest + Playwright + ESLint + commitlint/husky + CI.
-- [ ] `engine/` pure ports: time, naming, template formatter, media-kind. Golden `pure.*` green.
+- [x] Scaffold: Vite + TS + Svelte 5 + Vitest + Playwright + ESLint + commitlint/husky + CI + Pages deploy.
+- [x] `engine/` pure ports: time, naming, media-kind, version. Golden `pure.*` green.
+- [ ] Template formatter (`{track}`, `{number:02d}` …).
 - [ ] Audio analysis: filters, drop detection, envelope. Golden `audio.*` green.
 - [ ] CPU effect reference. Golden `effects.*` green.
 - [ ] App shell: tabs, routing, theming, Settings (persisted), capability detection, About.
@@ -44,6 +46,26 @@
 - **Effects**: Black & White, Negative. VHS moving tracking bar. Layers-vs-cascade ordering toggle. Background enable/disable. Colour swatch on the Fill row. Legible drag-hint colour.
 - **Rolling text overlay** (news-ticker style, per track), Prio 3.
 - **History as task manager**: a live queue of dispatched jobs with status, Prio 3. This fits the web well, because one Worker can host a job queue.
+
+## New tool: Stem Splitter (requested 2026-10-02, not in desktop)
+
+Separate a track into stems (vocals, drums, bass, other), fully client-side like everything else.
+
+- **Approach:** run a pretrained source-separation model in the browser with **ONNX Runtime Web** (WebGPU backend, WASM fallback). Candidate: **HTDemucs** (Demucs v4, MIT-licensed) exported to ONNX. Alternatives: Spleeter-class 2/4-stem models (smaller, lower quality), or a lighter MDX-Net variant.
+- **Pipeline:**
+  1. Decode to 44.1 kHz stereo PCM (the model's rate, so it must resample).
+  2. Chunk with overlap (e.g. ~8 s segments, cross-faded).
+  3. Run inference per chunk in a Worker.
+  4. Overlap-add the chunks into per-stem buffers.
+  5. Export each stem through the existing audio encoders and naming/sink (`{source} - {stem}`).
+- **Constraints to check in a spike:**
+  - Model download size: HTDemucs is in the ~80–300 MB range depending on variant and quantisation. Self-host it, lazy-load it, and cache it in OPFS / the Cache API.
+  - Inference time per minute of audio on WebGPU vs. WASM (WASM may be impractically slow for full tracks).
+  - Peak memory (activations for long chunks).
+  - WebGPU availability per browser.
+- **UI sketch:** a source picker, stem preset (2-stem vocals/accompaniment or 4-stem), output format (reuses Converter formats), a per-stem preview/solo player, and Export.
+- **Hosting:** model files on GitHub Pages count toward its limits (100 MB per file, ~1 GB site). Split or quantise the weights, or host them on a CDN that sends CORS/CORP headers. That still counts as static file serving, with no server-side processing.
+- Phase: after `1.0.0` (desktop parity), unless prioritised earlier.
 
 ## Web-only ideas
 

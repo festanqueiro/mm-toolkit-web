@@ -8,12 +8,13 @@
 | Build / dev server | **Vite** | Same as the author's other web projects |
 | Unit tests | **Vitest** | Golden-fixture parity tests ([12](12-testing-and-parity.md)) |
 | E2E tests | **Playwright** (Chromium, WebKit, Firefox) | Exercises the Tier 1/2 matrix |
-| UI framework | **Open decision (ADR-001)**. Recommendation: **Svelte 5** | Small runtime, good fit for form-heavy tabs. Alternatives: Preact + signals, Lit. Decide before Phase 1 |
+| UI framework | **Svelte 5** (ADR-001, decided 2026-10-02) | Small runtime, good fit for form-heavy tabs |
 | Media container I/O | **Mediabunny** | Demux/mux MP4, MOV, WebM, MKV, WAV, MP3, Ogg, ADTS, FLAC; drives WebCodecs. Verify the format list against the current release |
 | Codecs (primary) | **WebCodecs** | `VideoEncoder`/`VideoDecoder`/`AudioEncoder`/`AudioDecoder` |
 | Codecs (fallback) | **ffmpeg.wasm** (`@ffmpeg/ffmpeg`), lazy-loaded | MP3/FLAC/Vorbis encode, AVI, AIFF/exotic decode, MPEG-4 Part 2. Prefer an **LGPL build without x264** (see Licensing) |
 | Effects rendering | **WebGL2** on **OffscreenCanvas** in a Worker | WebGPU is a later optimisation, not required |
 | ZIP for batch download | `client-zip` or `fflate` (streaming) | Tier 2 export path |
+| Lint / types | ESLint (typescript-eslint, eslint-plugin-svelte) + `svelte-check` | TypeScript pinned to 6.x until svelte-check supports 7 |
 | Commit linting | commitlint + husky (Conventional Commits) | Mirrors the desktop repo policy |
 
 ## Layering (mirrors the desktop's two-layer split)
