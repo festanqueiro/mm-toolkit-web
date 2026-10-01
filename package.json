@@ -1,6 +1,6 @@
 {
   "name": "mm-toolkit-web",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "MM Toolkit in the browser: promo videos, clip cutting and media conversion, fully client-side.",
   "type": "module",
@@ -19,7 +19,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "prepare": "husky"
+    "prepare": "husky",
+    "bench": "playwright test -c playwright.bench.config.ts"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.2.3",

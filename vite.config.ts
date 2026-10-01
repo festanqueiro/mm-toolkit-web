@@ -48,7 +48,13 @@ export default defineConfig({
     __DEV_BUILD__: JSON.stringify(devBuildLabel()),
   },
   worker: { format: "es" },
-  build: { target: "es2022" },
+  build: {
+    target: "es2022",
+    rollupOptions: {
+      // spike.html: Phase 0 benchmark page, deployed so any device can be measured.
+      input: { main: "index.html", spike: "spike.html" },
+    },
+  },
   test: {
     include: ["tests/**/*.test.ts"],
     environment: "node",
