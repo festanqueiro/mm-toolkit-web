@@ -1,0 +1,100 @@
+# 05 — Media Cutter
+
+Port of `ui/clips_tab.py` + `core.cut_media_clips`. Desktop subtitle: *"Cut audio or video into precisely timed clips. Use HH:MM:SS, MM:SS, or seconds. End is optional; duration defaults to 60 seconds."*
+
+## Layout
+
+Two columns (≈ 5 : 4).
+
+**Left — Input** (group box)
+- **Source media**: path row (audio + video extensions) and status.
+- Video preview surface: shown only for video sources. 16:9 responsive, aspect kept, min 360×220.
+- Timeline: seek slider + `HH:MM:SS / HH:MM:SS` label.
+- Transport row: **▶ Play / Pause** · `Editing: {clip title}` label (bold) · stretch · **Set Start** · **Set End**.
+
+**Right**
+- **Clip timestamps** (group, stretches): table **Title** | **Start** | **End** | **Duration** | ▶ | 🗑, then **+ Add clip**, then a status line.
+  - Title placeholder `Clip {NN}`. Start default `00:00:00`, placeholder `Required, e.g. 00:03:15`. End placeholder `Optional`. Duration default `60`, placeholder `60`.
+  - ▶ tooltip "Play this clip". 🗑 tooltip "Remove this clip". Removing the last row adds a fresh empty one.
+  - The current row is highlighted. Focusing any field in a row makes it current. The label shows `Editing: {title or Clip NN}`, or `Editing: select a clip` when no row is current.
+- **Output** group, titled `{Audio|Video|Media} clip output`: **Export folder** + status.
+
+**Footer**: progress label (clickable → History) + bar. **Clear** | **Cancel** | requirements | **Create {Audio|Video|Media} Clips**.
+
+## Behaviour
+
+- **Set Start / Set End** writes `formatTimestamp(playerPosition)` into the current row's Start/End. If no row is current, use row 0.
+- **Clip preview ▶** seeks to start, plays, and stops at `start + duration`. Dragging the timeline, editing that row's timing, or toggling the button stops it.
+- **Video first-frame priming**: desktop briefly plays muted to show the first frame after loading. Web: setting `currentTime = 0` and waiting for `loadeddata` is enough.
+- **Clip resolution** (per row, `clip_request`):
+  - Start is required, else `enter a start timestamp.`
+  - If End is set: `duration = End − Start`. If ≤ 0: `End must be later than start.`
+  - Else `duration = parseTimestamp(Duration or "60")`. If ≤ 0: `Duration must be greater than zero.`
+  - Errors are reported as `Clip {n}: {error}`. The first failing row blocks the job.
+  - Engine-side guard: `start < 0 || duration <= 0` → `Clip {n} has an invalid start or duration.`
+
+## Messages
+
+| Where | Text |
+|---|---|
+| Source status | `✓ Source audio ready.` / `✓ Source video ready.` · `The source media could not be found.` · `The selected file is not supported audio or video.` |
+| Output status | `✓ {Audio|Video} clips will be exported as {FORMAT} files.` (video → `MP4`; audio → source extension uppercased, with `WAVE→WAV`, `AIF→AIFF`) · `Export folder is not writable.` |
+| Clip status | `✓ {n} clip{s} ready.` or `Clip {n}: {error}` |
+| Requirements | `To enable Create Clips: ` + [`choose valid source media`, `{clip error}`, `choose a writable export folder`] · `✓ Ready to create clips.` · `Creating clips…` |
+| Progress | `Preparing clips…` · `Creating clip {i} of {n}` · `Finished {n} clip{s}` · `Cancelling safely…` · `Cancelled. Partial files were removed.` |
+| Error dialog | `Clip creation failed` |
+
+## Output formats (must match desktop)
+
+- **Video source** → always **MP4**: first video stream + optional audio. H.264 (desktop: preset fast, CRF 18), yuv420p, AAC 256 kbps, `+faststart`. **Frame-accurate** (re-encoded, not stream-copied).
+- **Audio source** → **same format as the source**:
+
+| Source ext | Output | Codec settings |
+|---|---|---|
+| mp3 | `.mp3` | MP3 320 kbps CBR |
+| wav / wave | `.wav` | PCM **24-bit LE** |
+| aif / aiff | `.aiff` | PCM **24-bit BE** |
+| flac | `.flac` | FLAC (default compression) |
+| m4a | `.m4a` | AAC 320 kbps |
+| aac | `.aac` | AAC 320 kbps (ADTS) |
+| ogg | `.ogg` | Vorbis q8 |
+
+- Only the first audio stream is used, and video is dropped for audio sources.
+- Name: `clipTemplate` (Setting, default `{source} - {title}`) with `{source}` = stem, `{title}` = title or `Clip {NN}`, `{number}` = 1-based → `safeFilename` → extension → `resolveOutput`.
+- Invalid template: `Invalid clip naming template. Use {source}, {title}, and {number}.`
+- No clips: `Add at least one clip.`
+- Bad source: `Choose a supported audio or video source.`
+
+### Web implementation notes
+
+- **WAV/AIFF**: decode → slice samples → write 24-bit PCM in TS. Instant.
+- **AAC/M4A**: WebCodecs `AudioEncoder` where supported, else WASM.
+- **MP3/FLAC/OGG(Vorbis)**: WASM (audio-only, small). Lossy → lossy re-encodes, as desktop already does.
+- **Video**: Mediabunny conversion with a trim range + WebCodecs H.264/AAC re-encode. Use the quality mapping from [04](04-video-creator.md#output-and-encoding) with a fixed "High" profile, since desktop exposes no quality control here.
+- **Progress**: `round((i + fraction) / n * 100)`, where `fraction` = encoded media time / clip duration.
+
+### Preview playability
+
+`<video>`/`<audio>` can't play every source in every browser (MKV/AVI generally, AIFF outside Safari, some Ogg in Safari). Fallback, in order:
+
+1. Audio: decode to PCM, play via Web Audio, and show a **waveform** timeline in place of the native player.
+2. Video: show WebCodecs-decoded thumbnails while scrubbing, or offer a one-off "Create preview proxy" (WASM transcode to a low-res MP4).
+
+Cutting still works even when preview doesn't.
+
+## Persistence
+
+`clips/source`, `clips/output` are saved on Create and removed on Clear. Clear also resets the table to one empty row and the export folder to the Settings default.
+
+## History record
+
+```json
+{ "tool": "clips", "created": "…", "source": "<ref>", "output": "<ref>",
+  "clips": [{ "title": "Intro", "start": 12.0, "duration": 30.0 }], "outputs": ["<refs>"] }
+```
+
+Loading a clips job restores rows as Title / Start (`formatTimestamp`) / End empty / Duration (`str(duration)`).
+
+## Opportunity (not in desktop)
+
+**Lossless cut** option: stream-copy packets (exact for most audio; keyframe-aligned for video). Very fast and no quality loss. Off by default.

@@ -1,0 +1,185 @@
+# 04 — Video Creator
+
+Port of `ui/video_creator.py` + `core.generate_videos` / `core.render_track`. Desktop subtitle: *"Turn audio plus an image or video into a new music video at the visual's native resolution."*
+
+## Layout
+
+Two equal columns of **accordions**. Within each column, opening one section closes the others (desktop `Accordion`). A collapsed section shrinks to its header height.
+
+**Left column**
+
+1. **Input** (expanded by default)
+   - **Audio**: path row with **Choose File…** and **Choose Folder…**. Status line below.
+   - **Image or video**: path row with **Choose…**, a 104×104 thumbnail (94×94 image, aspect kept; a video shows its first frame), and a status line.
+2. **Audio timestamps** (collapsed by default; stretches to fill height only while expanded)
+   - Table, one row per track: **Audio** (file name, tooltip = full name) | **Start** (text field, placeholder `HH:MM:SS`, default `00:00:00`, plus ✨ button) | **Duration** (number, 1–3600 s, 1 decimal, suffix ` s`, default 60) | **▶/■** preview.
+   - Status line under the table (see Messages).
+   - Table style: alternating rows, no grid, hidden row header, rounded 8 px border, bold header. Same style as the Media Cutter table.
+
+**Right column**
+
+3. **Visual Effects**: the hint *"Drag rows to change the order effects are applied in."*, then a drag-reorderable list. Each row: ☰ handle (tooltip "Drag to reorder"), an enable checkbox, and a per-effect control:
+
+   | Row (default order) | Label | Control | Default |
+   |---|---|---|---|
+   | overlay | Overlay | slider 0–100 % (opacity) | off, 100 % |
+   | bass_blur | Bass-reactive Blur | — | **on** |
+   | rotate | Rotate | number 0.1–200.0, suffix ` RPM` | off, 33.3 |
+   | vhs | VHS | slider 0–100 % | off, 50 % |
+   | glitch | Glitch | slider 0–100 % | off, 50 % |
+
+   A row's control is enabled only while its checkbox is checked. Backlog: make the hint colour legible in both themes (desktop used `palette(mid)`, which reads near-black).
+4. **Layers**
+   - **Background**: **Fill** [Solid color | Image]. Solid shows a **Color** swatch button labelled `#rrggbb` (default `#19191d` = rgb 25,25,29). Image shows an **Image** picker. Only the row for the current mode is visible, label included. Backlog: put the swatch on the same row as Fill; add an enable/disable checkbox (off by default).
+   - **Overlay**: **Image** picker (png/jpg/jpeg/webp/tif/tiff).
+5. **Post-Effects**
+   - **Video sound**: checkbox "Mute original video sound" (default on). **Visible only when the visual is a video.**
+   - **Video**: "Fade video in/out" (default on).
+   - **Audio**: "Fade audio in/out" (default on).
+6. **Output** (expanded by default)
+   - **Export folder** + status (see [10](10-file-io-and-naming.md)).
+   - **Video profile**: Visual native | Vertical 1080 × 1920 | Square 1080 × 1080 | Landscape 1920 × 1080.
+   - **Frame rate**: 12–60, default 24.
+   - **Quality**: see [Output and encoding](#output-and-encoding). Replaces desktop "Quality (CRF)" + "Encoding speed".
+   - **Audio bitrate**: 128k | 192k | 256k | **320k**.
+   - **Estimated duration** and **Job estimate** (read-only).
+   - **New:** **Preview** panel (see [Live preview](#live-preview-new)).
+
+**Footer**: a progress status label (clickable once outputs exist → opens History with the latest job selected) and a progress bar. Action row: **Clear** | **Cancel** (only while running) | requirements text (stretches) | **Generate Video(s)** (min height 44).
+
+### Enablement
+
+- *Audio timestamps* is enabled when ≥1 audio file was found and no job is running.
+- *Visual Effects*, *Layers*, *Post-Effects* and *Output* are enabled when audio and visual are both valid and no job is running.
+- While a job runs, every input is disabled and any preview stops.
+- During drop analysis, every ✨ button is disabled and Generate is blocked.
+
+## Inputs
+
+- **Audio**: a single file, or a folder. A folder takes its **direct children only (not recursive)** with an audio extension (`.wav .wave .aif .aiff .flac .mp3 .m4a .aac .ogg`, case-insensitive), **sorted by name, case-insensitive**. Web: `<input webkitdirectory>` returns a recursive listing, so **filter to depth 1** for parity. Also accept drag & drop of files or a folder.
+- **Visual**: an image (`.png .jpg .jpeg .webp .tif .tiff`) or a video (`.mp4 .mov .m4v .mkv .avi .webm`). Image validation must actually decode it. Video validation must decode its first frame.
+- **Picker start location**: desktop opens the visual, background and overlay pickers in the audio file's folder. Web (Chromium): pass `startIn` = the audio `FileSystemHandle`. Other browsers: no equivalent, so skip.
+
+## Per-track timing
+
+- Each row's **Start** accepts `parseTimestamp` formats ([10](10-file-io-and-naming.md#timestamps)). **Duration** is seconds.
+- When the audio selection changes, rows are rebuilt, but **existing rows keep their start/duration**, keyed by file identity.
+- **Preview ▶** plays the track from `start` for `duration` seconds. Only one plays at a time. Clicking the playing row's button stops it. Editing that row's start or duration stops it.
+  - Tooltip: `Listen from {start or 'the start time'} for {duration:g} seconds`.
+  - Status: `Listening to {name} from {HH:MM:SS} for {duration:g} seconds.`
+  - An invalid start shows a "Preview unavailable" alert with the parse error.
+  - Web: use an `AudioBufferSourceNode.start(0, start, duration)` on the decoded PCM. This is sample-accurate and works for every decodable format.
+
+### Drop detection (✨ per row)
+
+1. The dialog **"Detect drop start"** says: *"MM Toolkit will analyze {track} and propose a start time based on its main drop."* Field **"Start before the drop"**: 0.0–60.0 s, step 0.5, 1 decimal, suffix ` seconds`. Defaults to the last value used (persisted `promo/drop_lead_in`, initial 2.0). Buttons: Cancel / **Analyze**.
+2. Running state: status `Analyzing {name} for its main drop…`. All ✨ disabled. Generate blocked with "wait for drop analysis".
+3. Success: set that row's Start to `formatTimestamp(max(0, drop − leadIn))`. This **rounds to whole seconds with banker's rounding**; see [10](10-file-io-and-naming.md#timestamps). Status: `✓ Proposed {HH:MM:SS} for {name}. You can edit or preview it.`
+4. Failure: `Drop detection failed: {message}. You can still enter the start manually.`
+5. Only one analysis may run at a time.
+
+## Messages (exact strings, keep them)
+
+| Where | Condition | Text |
+|---|---|---|
+| Audio status | n ≥ 1 | `✓ Found {n} audio file{s}.` |
+| Audio status | path set, none found | `No audio files were found.` |
+| Visual status | ok | `✓ Image ready.` / `✓ Video ready.` |
+| Visual status | errors | `The image could not be found.` · `The selected file is not a supported image.` · `The selected artwork could not be read.` · `The video could not be found.` · `The selected video could not be read.` · `The selected file cannot be used as an image or video.` |
+| Timestamps status | tracks present, idle | `Edit start times manually or use ✨ to detect a drop for one track.` |
+| Requirements | missing items | `To enable Generate: ` + `; `-joined from [`choose audio`, `choose a valid image or video`, `choose a writable export folder`, `Track {n}: {parse error}`, `wait for drop analysis`] + `.` |
+| Requirements | ready | `✓ Ready to generate videos.` |
+| Requirements | running | `Generating videos…` |
+| Generate button | 1 track / many | `Generate Video` / `Generate Videos` |
+| Estimated duration | equal durations | `{HH:MM:SS} per video • {HH:MM:SS total} combined` |
+| Estimated duration | differing | `{min}–{max} per video • {total} combined` |
+| Estimated duration | no tracks | `Select audio to estimate duration.` |
+| Job estimate | tracks | `{n} output(s) • {X.X} GB free` → web: use `navigator.storage.estimate()` when exporting via OPFS, else just `{n} output(s)` |
+| Job estimate | none | `Select audio to estimate this job.` |
+| Progress | start | `Preparing…` |
+| Progress | per track | `Analysing {name}` at `round(i/n*100)`; `Rendering {name}` at `round((i + frac)/n*100)` |
+| Progress | done | `Finished {n} video{s}` |
+| Progress | cancel requested | `Cancelling safely…` |
+| Progress | cancelled | `Cancelled. Partial files were removed.` |
+| Error dialog | failure | title `Generation failed`, message + expandable details |
+
+## Render pipeline (per track)
+
+Port of `render_track`. Runs in the job Worker.
+
+1. **Decode + normalise** the audio (see [02](02-audio-analysis.md#input-normalisation)).
+2. **Start time**: the per-row value. The UI always supplies one. The engine still supports `start = null` → `max(0, detectDropTime − 2.0)` (`pre_drop`) for API parity.
+3. **Snippet**: samples `[start, start + duration)`, clamped to the track end. `actualDuration = min(duration, snippetLength)`. If `actualDuration <= 0`, fail with `{name} contains no usable audio.`
+4. **Envelope**: only if Bass-reactive Blur is enabled: `buildBassEnvelope(snippet, fps, actualDuration)`.
+5. **Visual**
+   - **Canvas size**: the profile size. For *Visual native*, the visual's size **rounded down to even** width and height (H.264 4:2:0 needs even dimensions; at most one edge pixel is cropped).
+   - **Background**: `buildBackgroundFrame(canvas, background)`.
+   - **Image**: for a profile, **contain-fit** (Lanczos) centred on the background frame. Native: crop to even.
+   - **Video**: frame at `t mod videoDuration` (looping), fitted the same way. A visual with no duration fails with `{name} contains no usable video.`
+   - **Overlay**: only if enabled and an image is set: `loadOverlayImage(file, canvas)`.
+6. **Per frame** at `t = i / fps`: check cancel → visual frame → `applyEffectChain(frame, t, effects, background, envelope?[min(floor(t·fps), len−1)], overlay?)` → video fade.
+7. **Audio**: snippet with the audio fade. If the visual is a video **with** an audio track **and** "Mute original video sound" is off, loop the video's audio to `actualDuration` and **sum** it with the music. The fade applies to the music only.
+8. **Encode** H.264 4:2:0 + AAC (`audioBitrate`) → **.mp4** with `fastStart`. Stream to the sink.
+9. On error: delete the partial output and re-raise. On cancel: delete the partial output.
+
+### Batch (`generate_videos`)
+
+- Tracks run sequentially.
+- Output name: `namingTemplate` (Setting, default `{track} - Promo Snippet`) formatted with `{track}` = file stem and `{number}` = 1-based index → `safeFilename` → `.mp4` → `resolveOutput(conflictPolicy)`. **Skip** means the track isn't rendered.
+- An invalid template fails the job: `Invalid promo naming template. Use {track} and optionally {number}.`
+- No audio files: `No audio files were provided.`
+
+## Output and encoding
+
+The desktop uses libx264 with **CRF 14–30 (default 18)** and **preset ultrafast/fast/medium/slow (default medium)**, `yuv420p`, threads ≤ 4. WebCodecs has neither, so this is a **documented deviation**:
+
+- Replace both controls with **Quality**: `Maximum` · **`High` (default)** · `Standard` · `Small`.
+- Map each to WebCodecs settings:
+  - `bitrateMode: "variable"`, `latencyMode: "quality"`, and `bitrate = width × height × fps × bpp`.
+  - Starting bpp values: Maximum 0.20 · High 0.12 · Standard 0.07 · Small 0.04.
+  - **Calibrate in the Phase 0 spike** so High looks comparable to desktop CRF 18. Where `bitrateMode: "quantizer"` is supported, map to a per-frame QP instead (≈ CRF).
+- Pick the **H.264 level** from the frame size and fps (e.g. `avc1.640028` covers 1080p30; use 4.2/5.x for 1080p60 or larger native sizes).
+- If the encoder rejects a native size (some hardware caps at 4096 px), **scale down** to the largest supported size (keep aspect, even dimensions) and warn the user.
+- **AAC unavailable** (e.g. Firefox): encode the audio with ffmpeg.wasm AAC. If WASM is unavailable too, offer Opus-in-MP4 with a warning: "Some platforms may not accept Opus audio."
+
+## Live preview (new)
+
+- A preview canvas shows the visual with the full cascade, Layers and fades applied. It plays along with the selected row's audio snippet.
+- Uses the same GL effect code as the renderer, at reduced resolution (e.g. longest edge 540 px). Bass strength comes from the **precomputed** snippet envelope (not a live `AnalyserNode`), so preview equals render.
+- Updates live as effect settings change. Stops when a job starts.
+
+## Persistence
+
+Saved when generation starts. Restored on load. Removed by **Clear**.
+
+| Key | Value |
+|---|---|
+| `music`, `cover`, `output` | file/folder references ([11](11-data-model-and-persistence.md)) |
+| `promo/video_fade`, `promo/audio_fade`, `promo/mute_original_video_audio` | bool |
+| `promo/effects_state` | effects JSON (schema in [11](11-data-model-and-persistence.md#effects-state)) |
+| `promo/drop_lead_in` | number (saved on Analyze; Clear does not reset it) |
+
+**Clear** resets: paths (export folder → Settings default), effects (default order and values), fades on, mute on, profile Visual native, fps 24, quality default, bitrate 320k, progress hidden.
+
+## History record (on success)
+
+```json
+{
+  "tool": "promo",
+  "created": "2026-10-02T14:03:11",
+  "source": "<audio file or folder ref>",
+  "cover": "<visual ref>",
+  "output": "<export folder ref>",
+  "bass_effect": true,
+  "effects": { "...": "effects state, see 11" },
+  "video_fade": true,
+  "audio_fade": true,
+  "mute_original_video_audio": true,
+  "tracks": [{ "path": "<ref>", "start": 43.0, "duration": 60.0 }],
+  "fps": 24,
+  "profile": [1080, 1920],
+  "outputs": ["<output refs>"]
+}
+```
+
+`profile` is `null` for Visual native. Web additions (optional): `quality`, `audio_bitrate`.
