@@ -29,11 +29,18 @@
 4. **E2E**: Playwright with Chromium, WebKit, Firefox (`npx playwright install --with-deps`).
 5. **Build**: `vite build`. Assert the bundle budget: initial JS ≤ 300 KB gzip, excluding lazily-loaded ffmpeg.wasm.
 
-## Release (`.github/workflows/release.yml`, on push to `main`)
+## Deploy & release
 
-1. Build.
-2. Deploy to the static host's production environment.
-3. Create a GitHub Release/tag `v{version}` with generated notes.
-4. Fail if the tag already exists (i.e. the version wasn't bumped). Same guard idea as desktop.
+- **`deploy-pages.yml`**: build with `GITHUB_PAGES=1` (base `/mm-toolkit-web/`) and `MM_RELEASE=1` (no dev-build label), run the unit tests, then publish to GitHub Pages (`configure-pages` → `upload-pages-artifact` → `deploy-pages`). Reusable (`workflow_call`) and manual (`workflow_dispatch`, to redeploy `main` without a release).
+- **`release.yml`** (on push to `main`):
+  1. Fail if tag `v{version}` already exists (version not bumped). Same guard idea as desktop.
+  2. Call `deploy-pages.yml`.
+  3. Create GitHub Release `v{version}` with generated notes.
+
+## Branch protection (`main`)
+
+- Changes land **only via pull requests**. Direct pushes are blocked, as are force-pushes and branch deletion.
+- **Repository admins can bypass** (classic protection with `enforce_admins: false`).
+- No approving review is required (single maintainer). Required status checks can be added once CI names are stable.
 
 PR previews: not available on GitHub Pages. Reviewers run `npm run build && npm run preview` locally, or download the CI build artefact.
