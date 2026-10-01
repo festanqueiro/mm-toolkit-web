@@ -84,7 +84,7 @@ Per-frame lookup during render: `strength = env[min(floor(t * fps), env.length -
 |---|---|
 | `detectDropTime` | exact equality (it's a multiple of 0.5) |
 | `detectDropStartWithLeadIn2s` | exact |
-| `bassEnvelope.values` | max abs diff ≤ 1e-3, and same length |
+| `bassEnvelope.values` | max abs diff ≤ 1e-6 (fixture rounding), and same length. Achieved: 5e-7 |
 
 ## Performance budget
 

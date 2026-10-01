@@ -6,6 +6,20 @@ policy in `CLAUDE.md` (patch by default, minor/major only when requested).
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-10-02
+
+### Added
+- Audio analysis port: scipy-equivalent Butterworth SOS design and zero-phase
+  `sosfiltfilt`, drop detection and bass envelope. Drop times match the desktop
+  exactly; envelopes to 5e-7.
+- CPU reference effects (radial blur, rotate, overlay, VHS, glitch, background
+  and visual fitting) — bit-exact against the desktop for every deterministic
+  effect, porting OpenCV resize/warpAffine (5.x kernels) and Pillow Lanczos.
+- Effect settings model with desktop-compatible state JSON and lenient restore.
+- Python `str.format`-compatible naming-template formatter.
+- Golden fixtures extend to filter coefficients and naming templates, and record
+  the desktop's library versions.
+
 ## [0.1.1] - 2026-10-02
 
 ### Added

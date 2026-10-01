@@ -2,7 +2,7 @@
 
 ## Golden fixtures (the oracle)
 
-`fixtures/golden/` was produced by `scripts/generate_golden.py` running the **real desktop engine** (v1.0.2, commit `a0c8576`). See `fixtures/golden/README.md`.
+`fixtures/golden/` was produced by `scripts/generate_golden.py` running the **real desktop engine** (v1.0.2, commit `a0c8576`; OpenCV 5.0.0, Pillow 11.3.0, numpy 2.5.2, scipy 1.18.0, recorded in `generatedFrom`). See `fixtures/golden/README.md`.
 
 | Section of `golden.json` | Covers | Assertion |
 |---|---|---|
@@ -12,8 +12,10 @@
 | `pure.versionTuple`, `pure.isNewerVersion` | | exact |
 | `pure.artworkCanvas` | even-dimension crop, letterbox canvas shape | exact shape |
 | `audio.tracks[].detectDropTime` | 3 synthetic tracks (mono/stereo, short-track quirk) | exact |
-| `audio.tracks[].bassEnvelope` | 24 fps envelope over the full file | max abs diff ≤ 1e-3 |
-| `effects.cases` | radial blur, rotate, overlay, fit, chain, VHS, glitch | per-case `parity`: `exact` / `tolerance` / `visual-only` |
+| `audio.tracks[].bassEnvelope` | 24 fps envelope over the full file | max abs diff ≤ 1e-6 (fixture rounding; achieved 5e-7) |
+| `filters.butterSos`, `filters.sosfiltfilt` | scipy Butterworth SOS at 6 sample rates; zero-phase filtering of a test signal | rel. 1e-9 / abs 1e-9 |
+| `pure.templates` | Python `str.format` results and exception kinds for naming templates | exact (incl. `KeyError`/`ValueError`/`IndexError`) |
+| `effects.cases` | radial blur, rotate, overlay, fit, chain, VHS, glitch | per-case `parity`: `exact` (CPU reference, byte-equal) / `visual-only` |
 
 Fixture audio is 11025 Hz 16-bit PCM. Decode it in tests with a tiny TS WAV reader, not a browser decoder, so unit tests run in Node.
 

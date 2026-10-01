@@ -4,6 +4,19 @@ Port of `mm_toolkit/effects.py`. All effects are **pure per-frame functions over
 
 > ⚠️ **Channel-naming gotcha in the desktop source.** Frames are **RGB** numpy arrays, but `apply_vhs`/`apply_glitch` call `cv2.split` and name the results `b, g, r`. So "`b`" is really **R** (channel 0) and "`r`" is really **B** (channel 2). The *behaviour* below is described in true RGB terms. The Glitch "red split" actually shifts the **blue** channel. Replicate the behaviour, not the variable names.
 
+## Parity status (Phase 1)
+
+The CPU reference (`src/engine/effects/cpu/`) is **bit-exact** against the desktop for every deterministic effect: radial blur, rotate, overlay, overlay fitting and the full chain. Getting there required porting each library's internals:
+
+- **OpenCV `resize` INTER_LINEAR**: 11-bit fixed-point taps, `((b0*(S0>>4))>>16) + ((b1*(S1>>4))>>16) + 2) >> 2`.
+- **OpenCV `warpAffine` INTER_LINEAR as of OpenCV ≥ 4.11 / 5.x** (the desktop runs **5.0.0**): float32 source coordinates and float32 lerps, rounded half-to-even. The older 1/32-pixel fixed-point path is off by up to ±5.
+- **Pillow LANCZOS**: separable passes, each rounded to 8 bits with 22-bit coefficients, RGBA resampled **premultiplied**.
+- **numpy float32** arithmetic (`Math.fround`), truncating `astype(uint8)`, and `cv2.addWeighted` round-half-even saturation.
+
+Exactness depends on the desktop's library versions, recorded in `golden.json → generatedFrom.libraries`. The desktop's `requirements.txt` doesn't pin OpenCV, so a desktop build with OpenCV < 4.11 would rotate slightly differently.
+
+The **WebGL** implementations (Phase 2) are compared to the CPU reference with a tolerance (max abs diff ≤ 3, mean ≤ 1), because GPU texture sampling isn't bit-reproducible.
+
 ## Settings model (TS port of the dataclasses)
 
 ```ts
@@ -122,9 +135,9 @@ Applied by the render pipeline after the cascade:
 
 `fixtures/golden/frames/*.png` + `golden.json → effects.cases`, each tagged with a parity level:
 
-- `exact`: byte-equal RGB (e.g. VHS/Glitch at amount 0, Rotate 0°, Overlay opacity 0).
-- `tolerance`: max abs diff ≤ 3 and mean abs diff ≤ 1 per channel.
-- `visual-only`: same shape, differs from input. Optionally a perceptual check.
+- `exact`: byte-equal for the CPU reference. This applies to every deterministic case: blur, rotate, overlay, fit, chain, and VHS/Glitch at amount 0.
+- `visual-only`: depends on numpy's PCG64 RNG stream (VHS/Glitch with amount > 0). Assert the shape, that the frame changed, and determinism per `t`.
+- GPU output vs. the CPU reference: max abs diff ≤ 3 and mean abs diff ≤ 1 per channel.
 
 ## Backlog (from desktop TODO, Prio 1)
 
