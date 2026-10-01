@@ -2,9 +2,12 @@
 
 ## Phase 0 — Spike (≈ 1–2 days) — *de-risk before building*
 
-- [ ] Render a **60 s 1080×1920 promo** from a WAV + PNG with **bass blur in WebGL + WebCodecs H.264 + AAC → MP4**, in a Worker, on Chrome, Safari and Firefox. Record the timings in `docs/benchmarks.md`.
-- [ ] Calibrate the **Quality presets** (bpp/QP) against desktop CRF 18 output, side by side.
-- [ ] Confirm AAC `AudioEncoder` availability per browser, plus the WASM AAC fallback timing.
+- [x] Render a **60 s 1080×1920 promo** from a WAV + PNG with **bass blur in WebGL + WebCodecs H.264 + AAC → MP4**, in a Worker, on Chrome, Safari and Firefox. Record the timings in `docs/benchmarks.md`. → 8–10 s in Chrome/Safari/Firefox vs 33 s desktop.
+- [ ] Calibrate the **Quality presets** (bpp/QP) against desktop CRF 18 output, side by side. Preliminary: High ≈ 0.14 bpp; a VMAF comparison is pending.
+- [ ] WebKit: bitrates not honoured (AAC capped ~67 kb/s, video ~50 %). Investigate encoder modes; route AAC to WASM when the achieved bitrate is too low.
+- [ ] Force limited-range BT.709 output (WebKit/Chromium emitted full range).
+- [x] Confirm AAC `AudioEncoder` availability per browser: Chrome ✓, WebKit ✓ (bitrate capped), Firefox ✗ (Opus used).
+- [ ] Measure the WASM AAC fallback timing.
 - [ ] Confirm Mediabunny's container read/write list, and the ffmpeg.wasm LGPL build options (codecs available without x264).
 - [x] **ADR-001** UI framework → **Svelte 5**. **ADR-002** host → **GitHub Pages** (public repo). Licence → **MIT**.
 - [ ] Decide **ADR-003** (OGG Vorbis vs Opus) and **ADR-004** (keep AVI output?).
