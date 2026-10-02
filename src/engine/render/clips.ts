@@ -30,7 +30,7 @@ import {
 } from "mediabunny";
 import { clipOutputFormat, clipOutputName, type ClipFormat, type ClipRequest } from "../clips";
 import { decodeAiff, encodeAiff24, type PcmAudio } from "../media/aiff";
-import { decodesHere } from "../media/audio-decode";
+import { decodesHere, lastProbe } from "../media/audio-decode";
 import { parseStreamInfo, registerFlacDecoder } from "../media/flac-decoder";
 import { mediaKind } from "../media-kind";
 import type { ConflictPolicy } from "../naming";
@@ -206,7 +206,7 @@ async function videoOptions(input: Input, name: string, cb: ClipCallbacks): Prom
   const audio = await input.getPrimaryAudioTrack();
   const audioOk = !!audio && (await decodesHere(audio));
   if (audioOk) await ensureEncoder("aac");
-  else if (audio) cb.warn(`${name} has audio this browser can't decode, so the clips are silent.`);
+  else if (audio) cb.warn(`${name} has audio this browser can't decode, so the clips are silent. DIAG ${audio.codec} ${lastProbe}`);
   return {
     video: { codec, bitrate, forceTranscode: true, ...(odd ? { width, height, fit: "fill" as const } : {}) },
     audio: audioOk ? { codec: "aac", bitrate: VIDEO_AUDIO_BITRATE, forceTranscode: true } : { discard: true },

@@ -58,7 +58,9 @@ function slice(pcm: PcmAudio, range?: DecodeRange): PcmAudio {
  * arrive within `timeoutMs`. Some engines report support and then fail or never produce a
  * sample (WebKitGTK's GStreamer Vorbis decoder hangs), which `canDecode()` can't reveal.
  */
+export let lastProbe = "";
 export async function decodesHere(track: InputAudioTrack, timeoutMs = 4000): Promise<boolean> {
+  const t0 = performance.now();
   if (!(await track.canDecode())) return false;
   const samples = new AudioSampleSink(track).samples();
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -66,12 +68,19 @@ export async function decodesHere(track: InputAudioTrack, timeoutMs = 4000): Pro
     return await Promise.race([
       samples.next().then(
         (result) => {
+          lastProbe = `done=${result.done} after ${Math.round(performance.now() - t0)}ms`;
           result.value?.close();
           return !result.done;
         },
-        () => false,
+        (e) => {
+          lastProbe = `error ${e} after ${Math.round(performance.now() - t0)}ms`;
+          return false;
+        },
       ),
-      new Promise<boolean>((resolve) => (timer = setTimeout(() => resolve(false), timeoutMs))),
+      new Promise<boolean>((resolve) => (timer = setTimeout(() => {
+        lastProbe = `timeout after ${Math.round(performance.now() - t0)}ms`;
+        resolve(false);
+      }, timeoutMs))),
     ]);
   } finally {
     clearTimeout(timer);
