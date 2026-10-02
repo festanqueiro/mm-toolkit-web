@@ -45,6 +45,13 @@ test("the rail stays in view while the setup scrolls (wide screens)", async ({ p
   await page.goto("/#/converter");
   // The button must live in the rail (today's sticky footer would also stay in view).
   const button = page.getByRole("complementary", { name: "Output" }).getByRole("button", { name: "Convert Files" });
+  // Make the setup column reliably taller than the window: how tall the empty page is
+  // depends on fonts (WebKitGTK's barely scrolled), and this test is about the rail.
+  await page.evaluate(() => {
+    const spacer = document.createElement("div");
+    spacer.style.height = "2000px";
+    document.querySelector('[data-testid="rail"]')!.previousElementSibling!.append(spacer);
+  });
   await page.mouse.move(400, 400);
   await page.mouse.wheel(0, 2000);
   await page.waitForTimeout(300);
