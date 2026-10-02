@@ -7,8 +7,8 @@
 import { pyRound } from "../../py";
 import { rotateAngle, type EffectSettings, type Rgb } from "../settings";
 import { addWeighted, cloneImage, createImage, rollRows, solidImage, truncU8, type Image8 } from "./image";
+import { glitchPlan, vhsNoise, vhsSeed } from "../plan";
 import { cvResizeLinear, cvWarpAffine, paste, pillowContain, pillowFit, rotationMatrix } from "./resample";
-import { SeededRandom } from "./rng";
 
 export const BLUR_SAMPLES = 6;
 export const MAX_ZOOM = 0.1;
@@ -84,7 +84,10 @@ export function applyRotate(frame: Image8, angleDegrees: number, background: Ima
   return out;
 }
 
-/** `apply_vhs`: R shifted left, B shifted right, even-row scanlines, seeded grain, dry/wet blend. */
+/**
+ * `apply_vhs`: R shifted left, B shifted right, even-row scanlines, seeded grain, dry/wet
+ * blend. The grain is a per-pixel hash (`plan.vhsNoise`) shared with the shader.
+ */
 export function applyVhs(frame: Image8, amount: number, time: number): Image8 {
   if (amount <= 0) return frame;
   const { width, height } = frame;
@@ -93,13 +96,16 @@ export function applyVhs(frame: Image8, amount: number, time: number): Image8 {
   rollRows(shifted, 0, height, -shift, 0);
   rollRows(shifted, 0, height, shift, 2);
   const scan = f32(1 - 0.35 * amount);
-  const rng = new SeededRandom(Math.trunc(time * 1000));
+  const seed = vhsSeed(time);
   const sd = 10 * amount;
   const wet = createImage(width, height, 3);
   for (let y = 0; y < height; y++) {
     const factor = y % 2 === 0 ? scan : 1;
-    for (let i = y * width * 3; i < (y + 1) * width * 3; i++) {
-      wet.data[i] = truncU8(f32(f32(shifted.data[i]! * factor) + f32(rng.normal(0, sd))));
+    for (let x = 0; x < width; x++) {
+      for (let c = 0; c < 3; c++) {
+        const i = (y * width + x) * 3 + c;
+        wet.data[i] = truncU8(f32(f32(shifted.data[i]! * factor) + f32(sd * vhsNoise(x, y, c, seed))));
+      }
     }
   }
   return addWeighted(frame, 1 - amount, wet, amount);
@@ -109,17 +115,10 @@ export function applyVhs(frame: Image8, amount: number, time: number): Image8 {
 export function applyGlitch(frame: Image8, amount: number, time: number): Image8 {
   if (amount <= 0) return frame;
   const { width, height } = frame;
-  const rng = new SeededRandom(Math.trunc(time * 1000) + 1);
+  const plan = glitchPlan(amount, time, width, height);
   const wet = cloneImage(frame);
-  const iterations = Math.trunc(2 + 10 * amount);
-  for (let i = 0; i < iterations; i++) {
-    if (rng.random() > amount + 0.2) continue;
-    const y0 = rng.integers(0, height);
-    const y1 = Math.min(height, y0 + rng.integers(2, Math.max(3, Math.trunc(height * 0.05) + 1)));
-    const shift = rng.integers(Math.floor(-width / 8), Math.floor(width / 8) + 1);
-    rollRows(wet, y0, y1, shift);
-  }
-  if (amount > 0.3) rollRows(wet, 0, height, pyRound(4 * amount), 2);
+  for (const { y0, y1, shift } of plan.slices) rollRows(wet, y0, y1, shift);
+  if (plan.blueShift) rollRows(wet, 0, height, plan.blueShift, 2);
   return addWeighted(frame, 1 - amount, wet, amount);
 }
 
@@ -147,6 +146,14 @@ export function applyEffectChain(
     }
   }
   return result;
+}
+
+/** moviepy fade on a uint8 frame: float multiply, then `astype(uint8)` truncation. */
+export function applyVideoFade(frame: Image8, gain: number): Image8 {
+  if (gain >= 1) return frame;
+  const out = createImage(frame.width, frame.height, 3);
+  for (let i = 0; i < out.data.length; i++) out.data[i] = truncU8(frame.data[i]! * gain);
+  return out;
 }
 
 /**

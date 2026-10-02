@@ -1,6 +1,7 @@
 import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
+import { playwright } from "@vitest/browser-playwright";
 import { defineConfig } from "vitest/config";
 
 const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf-8")) as { version: string };
@@ -56,7 +57,24 @@ export default defineConfig({
     },
   },
   test: {
-    include: ["tests/**/*.test.ts"],
-    environment: "node",
+    projects: [
+      // Pure engine code in Node (fast, no browser).
+      { extends: true, test: { name: "unit", include: ["tests/**/*.test.ts"], exclude: ["tests/browser/**"], environment: "node" } },
+      // WebGL parity against the CPU reference, in real engines (spec 12, layer 2).
+      {
+        extends: true,
+        test: {
+          name: "gl",
+          include: ["tests/browser/**/*.test.ts"],
+          browser: {
+            enabled: true,
+            headless: true,
+            provider: playwright(),
+            screenshotFailures: false,
+            instances: [{ browser: "chromium" }, { browser: "webkit" }, { browser: "firefox" }],
+          },
+        },
+      },
+    ],
   },
 });

@@ -46,7 +46,7 @@ The desktop suite (`docs/reference/desktop-source/tests/`) maps to Vitest as fol
 ## Test layers
 
 1. **Unit (Vitest, Node)**: `engine/` pure functions, the CPU effect reference, filters, naming, the template formatter, capability routing (with mocked `isConfigSupported`).
-2. **GL parity (Vitest browser mode or Playwright)**: GL effect output vs. the CPU reference / golden PNGs, using the same tolerances.
+2. **GL parity (Vitest browser mode, `npm run test:gl`)**: `tests/browser/` runs in headless Chromium, WebKit and Firefox. It compares GL effect output to the golden PNGs (deterministic cases) and to the CPU reference (VHS/Glitch at several amounts and times, a reordered full cascade with fade), with max abs diff ≤ 3 and mean ≤ 1. CI runs it per engine in the E2E matrix (`--project "gl (<engine>)"`).
 3. **E2E (Playwright: Chromium, WebKit, Firefox)**: the user flows for each tool on tiny fixtures. Assert that outputs decode, with the right duration (±1 frame / ±10 ms), dimensions, and codecs. Use the DownloadSink on WebKit/Firefox and DirectorySink on Chromium (mock directory picker via OPFS).
 4. **Benchmarks (manual, Phase 0 and per release)**: render a 60 s 1080×1920 promo, blur only, on the reference machine (record its specs). Track the time per browser in `docs/benchmarks.md`.
 

@@ -6,6 +6,21 @@ policy in `CLAUDE.md` (patch by default, minor/major only when requested).
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-10-02
+
+### Added
+- WebGL2 effect cascade (`GlEffectRenderer`): overlay, bass-reactive radial
+  blur, rotate, VHS and Glitch in any order, plus the video fade. Runs on an
+  OffscreenCanvas (render Worker) or a page canvas (live preview).
+  Byte-equal to the desktop golden frames for blur, rotate and overlay.
+- Video and audio fades matching the desktop's moviepy fades.
+- GL parity tests in real Chromium, WebKit and Firefox (Vitest browser mode,
+  `npm run test:gl`), also run in CI.
+
+### Changed
+- VHS grain and Glitch slices now come from a plan shared by the CPU and GL
+  paths (per-pixel hash noise), so both render identical frames.
+
 ## [0.1.3] - 2026-10-02
 
 ### Added
