@@ -3,7 +3,25 @@ import { expect, test, type Page } from "@playwright/test";
 
 const media = (name: string) => fileURLToPath(new URL(`../fixtures/media/${name}`, import.meta.url));
 
+/**
+ * Native codec support differs by engine and platform (WebKitGTK's GStreamer plays MKV and
+ * AIFF; macOS WebKit doesn't play MKV), so make the native element fail everywhere: the
+ * fallback paths are then tested in every engine.
+ */
+async function breakNativePlayback(page: Page) {
+  await page.addInitScript(() => {
+    new MutationObserver(() => {
+      for (const el of document.querySelectorAll<HTMLMediaElement>("audio, video")) {
+        if (el.dataset.broken) continue;
+        el.dataset.broken = "1";
+        el.src = "data:application/x-unplayable,";
+      }
+    }).observe(document, { childList: true, subtree: true });
+  });
+}
+
 async function choose(page: Page, name: string) {
+  await breakNativePlayback(page);
   await page.goto("/#/cutter");
   const chooser = page.waitForEvent("filechooser");
   await page.getByRole("region", { name: "Input" }).getByRole("button", { name: "Choose…" }).click();
@@ -16,12 +34,11 @@ const shownTime = async (page: Page) => {
   return h! * 3600 + m! * 60 + s!;
 };
 
-test("audio the browser can't play gets a waveform with playback, seeking and clip preview", async ({ page, browserName }) => {
+test("audio the browser can't play gets a waveform with playback, seeking and clip preview", async ({ page }) => {
   await choose(page, "short-10s-mono.aiff");
   await expect(page.getByTestId("player-time")).toHaveText("00:00:00 / 00:00:10", { timeout: 15_000 });
-  // Chromium and Firefox can't play AIFF natively; WebKit can.
-  await expect(page.getByTestId("player")).toHaveAttribute("data-mode", browserName === "webkit" ? "native" : "waveform");
-  if (browserName !== "webkit") await expect(page.getByTestId("waveform")).toBeVisible();
+  await expect(page.getByTestId("player")).toHaveAttribute("data-mode", "waveform");
+  await expect(page.getByTestId("waveform")).toBeVisible();
 
   await page.getByLabel("Timeline").fill("4");
   await expect(page.getByTestId("player-time")).toHaveText("00:00:04 / 00:00:10");
@@ -43,12 +60,10 @@ test("audio the browser can't play gets a waveform with playback, seeking and cl
   expect(await shownTime(page)).toBe(3);
 });
 
-test("video the browser can't play is previewed as decoded frames", async ({ page, browserName }) => {
+test("video the browser can't play is previewed as decoded frames", async ({ page }) => {
   await choose(page, "clip-3s-320x240.mkv");
   await expect(page.getByTestId("player-time")).toHaveText("00:00:00 / 00:00:03", { timeout: 15_000 });
-  // WebKit can't play Matroska; Chromium and Firefox can.
-  await expect(page.getByTestId("player")).toHaveAttribute("data-mode", browserName === "webkit" ? "frames" : "native");
-  test.skip(browserName !== "webkit", "Only WebKit needs the frame fallback for MKV.");
+  await expect(page.getByTestId("player")).toHaveAttribute("data-mode", "frames");
 
   const canvas = page.locator("canvas.frames");
   const pixels = () =>
