@@ -40,7 +40,7 @@
 
 - [x] History: Load Job with re-select flow, OPFS retention (2 GB cap), inline preview, unread badge.
 - [x] PWA: offline, install, update prompt, app badge, File Handling.
-- [ ] Settings/history import from desktop.
+- ~~Settings/history import from desktop.~~ Dropped (2026-10-02): the desktop app may be discontinued.
 - [ ] Accessibility pass: keyboard reordering for the effect list, focus management, ARIA on tables and progress.
 - [ ] Docs: user guide with a browser-support matrix.
 
