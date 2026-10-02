@@ -6,6 +6,18 @@ policy in `CLAUDE.md` (patch by default, minor/major only when requested).
 
 ## [Unreleased]
 
+## [0.1.14] - 2026-10-02
+
+### Added
+- **Stem Splitter** tab: split a song (or a video's soundtrack) into vocals, drums, bass, other, or vocals + instrumental, entirely on this device.
+  - HT-Demucs v4 (MIT). The 170 MB model downloads once from Hugging Face (only the model; your audio never leaves the device), is checked for integrity, and is kept for offline use.
+  - Runs on the GPU (WebGPU) where available, else on the CPU (slower, with a note).
+  - Any audio output format (WAV by default), inline players for the results, export folder or Downloads/ZIP, progress, Cancel, History and Load Job.
+
+### Fixed
+- Pressing Cancel while a job was still preparing was ignored (all tools).
+- WebKit: Cancel could be lost in the Media Cutter and Media Converter (the job worker's entry module was loaded twice).
+
 ## [0.1.13] - 2026-10-02
 
 ### Added

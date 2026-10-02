@@ -30,6 +30,7 @@
       <li class="chip blue">Video Creator</li>
       <li class="chip pink">Media Cutter</li>
       <li class="chip blue">Media Converter</li>
+      <li class="chip pink">Stem Splitter</li>
     </ul>
     <p class="links">
       {#if pwa.canInstall}

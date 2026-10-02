@@ -103,7 +103,7 @@ Each encode or decode is routed through a single decision function. For example,
 | Video decode | WebCodecs via Mediabunny | ffmpeg.wasm transcode to an intermediate (ProRes, AVI, …) |
 | Image decode | `createImageBitmap` | TIFF via `utif` (only Safari decodes TIFF natively) |
 
-Mediabunny's WASM encoders are registered with `canEncodeAudio` checks, lazily, inside the job Worker. **Keep Mediabunny out of a worker's entry module**: load the pipeline with a dynamic `import()` (see `job.worker.ts`). The encoder chunks import Mediabunny from wherever the bundler put it, and WebKit evaluates an imported worker entry as a second module instance, so encoders registered there are invisible to the job.
+Mediabunny's WASM encoders are registered with `canEncodeAudio` checks, lazily, inside the job Worker. **A worker's entry module must statically import nothing**: it keeps only its message state and dynamic-`import()`s the logic (`job.worker.ts` → `job-host.ts`). Otherwise the bundler puts shared code (Mediabunny, `CancelledError`) in the entry, lazy chunks import it back, and WebKit evaluates the entry as a second module instance: WASM encoders registered in one copy are invisible to the other, and the second `onmessage` swallows Cancel. `e2e/build.spec.ts` asserts no chunk imports the entry.
 
 Ask the browser directly (`AudioEncoder.isConfigSupported`) when deciding whether to register a fallback: Mediabunny's `canEncodeAudio` **memoizes per config**, so asking it before registering caches "unsupported" for that config even after the fallback exists.
 

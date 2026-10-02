@@ -15,7 +15,8 @@ The repo is currently **specs-first**. Before implementing anything, read `docs/
 - Route codecs by **runtime capability detection** (`engine/media/capabilities.ts`), never by user-agent.
 - Stream decode → effect → encode → mux → sink. Never buffer all frames. Process batches sequentially.
 - Cancel and failure must delete partial outputs (every `OutputSink` implements `remove`).
-- Keep Mediabunny out of a worker's entry module: dynamic-`import()` the pipeline. WebKit re-instantiates an imported worker entry, so WASM encoders registered there silently vanish (spec 01).
+- A worker entry module must statically import nothing (see `workers/job.worker.ts` → `job-host.ts`): if a lazy chunk imports shared code back from the entry, WebKit evaluates the entry a second time, duplicating Mediabunny (registered WASM encoders vanish) and `onmessage` (Cancel is lost). `e2e/build.spec.ts` guards it.
+- Never `terminate()` a worker that may hold a WebGPU device: WebKit crashes the page. The Stem Splitter reuses one worker; cancel is cooperative.
 - UI colours come from theme tokens that follow `prefers-color-scheme`. No hardcoded colours in components.
 
 ## Parity gotchas (easy to get wrong)

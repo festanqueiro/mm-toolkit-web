@@ -3,7 +3,8 @@ import type { OutputRef } from "../io/sink";
 import type { JobRequest, RenderEvent } from "../workers/render-protocol";
 import { app } from "./state.svelte";
 
-export type JobHandlers = { progress: (percent: number, status: string) => void; warn: (message: string) => void };
+/** `cancelled`: Cancel was pressed before this worker existed; it's forwarded as soon as the job starts. */
+export type JobHandlers = { progress: (percent: number, status: string) => void; warn: (message: string) => void; cancelled?: () => boolean };
 
 type WakeLock = { release: () => Promise<void> };
 
@@ -35,6 +36,7 @@ export function runJob<J>(worker: Worker, request: JobRequest<J>, on: JobHandler
     };
     worker.onerror = (event) => reject(new Error(event.message || "The worker stopped unexpectedly."));
     worker.postMessage(request);
+    if (on.cancelled?.()) worker.postMessage({ type: "cancel" } satisfies JobRequest<J>);
   }).finally(done);
 }
 

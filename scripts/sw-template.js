@@ -34,5 +34,18 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(caches.match(shell, { cacheName: CACHE }).then((hit) => hit || fetch(request)));
     return;
   }
-  event.respondWith(caches.match(request, { cacheName: CACHE, ignoreSearch: true }).then((hit) => hit || fetch(request)));
+  // Hashed build assets not precached (the ONNX Runtime WASM) are cached on first use.
+  event.respondWith(
+    caches.match(request, { cacheName: CACHE, ignoreSearch: true }).then(
+      (hit) =>
+        hit ||
+        fetch(request).then((response) => {
+          if (response.ok && new URL(request.url).pathname.includes("/assets/")) {
+            const copy = response.clone();
+            void caches.open(CACHE).then((cache) => cache.put(request, copy));
+          }
+          return response;
+        }),
+    ),
+  );
 });

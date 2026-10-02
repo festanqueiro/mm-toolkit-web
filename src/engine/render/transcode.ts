@@ -449,32 +449,30 @@ async function mediabunnyPcm(source: File, trim?: { start: number; duration: num
   };
 }
 
-/** Encode a PCM source: AIFF in TS, everything else through a Mediabunny encoder + muxer. */
-async function pcmPipeline(pcm: PcmSource, target: Extract<Target, { kind: "audio" }>, options: TranscodeOptions): Promise<Uint8Array> {
-  const { cb, onFraction } = options;
-  let done = 0;
-  const step = (planes: Float32Array[]) => {
-    if (cb.cancelled()) throw new CancelledError();
-    done += planes[0]?.length ?? 0;
-    onFraction(pcm.frames ? done / pcm.frames : 1);
-  };
+/** Push-style audio encoder: feed planar PCM spans in order, then `finish()` for the file. */
+export type PcmEncoder = { push: (planes: Float32Array[]) => Promise<void>; finish: () => Promise<Uint8Array>; cancel: () => Promise<void> };
+
+/** An encoder for `target` at `sampleRate`: AIFF written in TS, everything else via Mediabunny. */
+export async function createPcmEncoder(target: Extract<Target, { kind: "audio" }>, sampleRate: number, channels: number): Promise<PcmEncoder> {
   if (target.format === "aiff") {
-    // Collect 24-bit spans, then write once the frame count is known.
-    const channels: Float32Array[][] = Array.from({ length: pcm.channels }, () => []);
-    for await (const planes of pcm.spans) {
-      planes.forEach((plane, c) => channels[c]!.push(plane.slice()));
-      step(planes);
-    }
-    const joined = channels.map((parts) => {
-      const out = new Float32Array(parts.reduce((n, p) => n + p.length, 0));
-      let at = 0;
-      for (const part of parts) {
-        out.set(part, at);
-        at += part.length;
-      }
-      return out;
-    });
-    return encodeAiff24({ sampleRate: pcm.sampleRate, channels: joined });
+    // Collect spans, then write once the frame count is known.
+    const parts: Float32Array[][] = Array.from({ length: channels }, () => []);
+    return {
+      push: async (planes) => planes.forEach((plane, c) => parts[c]!.push(plane.slice())),
+      finish: async () => {
+        const joined = parts.map((list) => {
+          const out = new Float32Array(list.reduce((n, p) => n + p.length, 0));
+          let at = 0;
+          for (const part of list) {
+            out.set(part, at);
+            at += part.length;
+          }
+          return out;
+        });
+        return encodeAiff24({ sampleRate, channels: joined });
+      },
+      cancel: async () => {},
+    };
   }
   const encoding = audioEncoding(target);
   await ensureEncoder(encoding.codec);
@@ -482,8 +480,8 @@ async function pcmPipeline(pcm: PcmSource, target: Extract<Target, { kind: "audi
   const source = new AudioSampleSource(encoding);
   output.addAudioTrack(source);
   await output.start();
-  const rate = encodeRate(encoding.codec, pcm.sampleRate);
-  const resampler = rate !== pcm.sampleRate ? new StreamResampler(pcm.channels, pcm.sampleRate, rate) : null;
+  const rate = encodeRate(encoding.codec, sampleRate);
+  const resampler = rate !== sampleRate ? new StreamResampler(channels, sampleRate, rate) : null;
   let at = 0;
   const add = async (planes: Float32Array[]) => {
     const n = planes[0]?.length ?? 0;
@@ -495,17 +493,33 @@ async function pcmPipeline(pcm: PcmSource, target: Extract<Target, { kind: "audi
     sample.close();
     at += n;
   };
+  return {
+    push: (planes) => add(resampler ? resampler.push(planes) : planes),
+    finish: async () => {
+      if (resampler) await add(resampler.finish());
+      source.close();
+      await output.finalize();
+      return new Uint8Array(output.target.buffer!);
+    },
+    cancel: () => output.cancel().catch(() => {}),
+  };
+}
+
+/** Encode a PCM source: AIFF in TS, everything else through a Mediabunny encoder + muxer. */
+async function pcmPipeline(pcm: PcmSource, target: Extract<Target, { kind: "audio" }>, options: TranscodeOptions): Promise<Uint8Array> {
+  const { cb, onFraction } = options;
+  const encoder = await createPcmEncoder(target, pcm.sampleRate, pcm.channels);
+  let done = 0;
   try {
     for await (const planes of pcm.spans) {
-      await add(resampler ? resampler.push(planes) : planes);
-      step(planes);
+      if (cb.cancelled()) throw new CancelledError();
+      await encoder.push(planes);
+      done += planes[0]?.length ?? 0;
+      onFraction(pcm.frames ? done / pcm.frames : 1);
     }
-    if (resampler) await add(resampler.finish());
-    source.close();
-    await output.finalize();
+    return await encoder.finish();
   } catch (error) {
-    await output.cancel().catch(() => {});
+    await encoder.cancel();
     throw error;
   }
-  return new Uint8Array(output.target.buffer!);
 }
