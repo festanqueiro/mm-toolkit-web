@@ -6,6 +6,12 @@ policy in `CLAUDE.md` (patch by default, minor/major only when requested).
 
 ## [Unreleased]
 
+## [0.1.17] - 2026-10-02
+
+### Changed
+- Accessibility: every page is now audited automatically (axe, WCAG 2.2 AA, light and dark); all pass.
+- Roadmap: the desktop settings/history import is dropped (the desktop app may be discontinued).
+
 ## [0.1.16] - 2026-10-02
 
 ### Fixed
