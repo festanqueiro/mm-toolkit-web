@@ -45,15 +45,22 @@ export async function registerPwa(): Promise<void> {
       pwa.updateReady = true;
     },
   );
+  // New versions take over on their own (sw-template.js): once a page that was already
+  // controlled gets a new controller, offer the reload into the new version.
+  let controlled = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (controlled) pwa.updateReady = true;
+    controlled = true;
+  });
   // Look for a new version hourly and whenever the app comes back to the foreground.
   const check = () => void registration.update().catch(() => {});
   setInterval(check, 60 * 60 * 1000);
   document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && check());
 }
 
-/** "Reload": let the waiting version take over, then reload into it. */
+/** "Reload": into the new version (asking a still-waiting worker to take over first). */
 export function applyUpdate(): void {
-  if (!waiting) return location.reload();
+  if (!waiting || waiting.state !== "installed") return location.reload();
   navigator.serviceWorker.addEventListener("controllerchange", () => location.reload(), { once: true });
   waiting.postMessage({ type: "SKIP_WAITING" });
 }
