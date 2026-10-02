@@ -93,15 +93,17 @@ Each encode or decode is routed through a single decision function. For example,
 | H.264 encode | WebCodecs | ffmpeg.wasm `libx264` (GPL build only; slow). Otherwise the job is unsupported |
 | VP9 encode (webm) | WebCodecs | ffmpeg.wasm `libvpx-vp9` |
 | MPEG-4 Part 2 encode (avi) | — | ffmpeg.wasm `mpeg4` |
-| AAC encode | WebCodecs | ffmpeg.wasm `aac` (audio-only: fast enough) |
+| AAC encode | WebCodecs | `@mediabunny/aac-encoder` (WASM) |
 | Opus encode | WebCodecs | ffmpeg.wasm `libopus` |
-| MP3 encode | ffmpeg.wasm `libmp3lame` (or `lamejs`) | — |
-| FLAC encode | ffmpeg.wasm `flac` (or `libflac.js`) | — |
-| Vorbis encode | ffmpeg.wasm `libvorbis` | — |
+| MP3 encode | `@mediabunny/mp3-encoder` (LAME, WASM) | — |
+| FLAC encode | `@mediabunny/flac-encoder` (WASM) | — |
+| Vorbis encode | ffmpeg.wasm `libvorbis` (not shipped; Media Cutter uses Opus in Ogg until ADR-003) | — |
 | WAV/AIFF 16/24-bit PCM | Pure TS writer | — |
-| Audio decode | WebCodecs via Mediabunny; WAV/AIFF parsed in TS | ffmpeg.wasm → PCM |
+| Audio decode | WebCodecs via Mediabunny; WAV/AIFF parsed in TS; FLAC decoded in TS (WebKit's WebCodecs FLAC fails at runtime) | ffmpeg.wasm → PCM |
 | Video decode | WebCodecs via Mediabunny | ffmpeg.wasm transcode to an intermediate (ProRes, AVI, …) |
 | Image decode | `createImageBitmap` | TIFF via `utif` (only Safari decodes TIFF natively) |
+
+Mediabunny's WASM encoders are registered with `canEncodeAudio` checks, lazily, inside the job Worker. **Keep Mediabunny out of a worker's entry module**: load the pipeline with a dynamic `import()` (see `cut.worker.ts`). The encoder chunks import Mediabunny from wherever the bundler put it, and WebKit evaluates an imported worker entry as a second module instance, so encoders registered there are invisible to the job.
 
 ## Memory and streaming rules
 

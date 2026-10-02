@@ -27,6 +27,7 @@ import { applyAudioFade, fadeLength, videoFadeGain } from "../effects/fade";
 import { GlEffectRenderer, WebGLUnavailableError, type FrameOptions } from "../effects/gl/renderer";
 import type { EffectSettings } from "../effects/settings";
 import { AudioDecodeError, decodeAudio } from "../media/audio-decode";
+import { CancelledError } from "./cancel";
 import { safeFilename, type ConflictPolicy } from "../naming";
 import { formatTemplate, PROMO_TEMPLATE_ERROR } from "../template";
 import { canvasSize, videoBitrate, type Quality, type Size } from "../video-creator";
@@ -58,11 +59,7 @@ export type PromoCallbacks = {
   cancelled: () => boolean;
 };
 
-export class CancelledError extends Error {
-  constructor() {
-    super("Cancelled");
-  }
-}
+export { CancelledError };
 
 const stem = (name: string) => (name.lastIndexOf(".") > 0 ? name.slice(0, name.lastIndexOf(".")) : name);
 

@@ -89,3 +89,18 @@ export async function detectDrop(file: Blob): Promise<number> {
     return call("detectDropPcm", { pcm }, pcm.channels.map((c) => c.buffer as ArrayBuffer));
   }
 }
+
+/**
+ * The page's own decoder (Web Audio) at the file's native rate, so nothing is resampled: the
+ * fallback when a Worker can't decode the codec. Holds the whole file as PCM.
+ */
+export async function decodeAtNativeRate(file: Blob, sampleRate: number, numberOfChannels: number): Promise<PcmAudio> {
+  const context = new OfflineAudioContext(Math.max(1, numberOfChannels), 1, sampleRate);
+  let buffer: AudioBuffer;
+  try {
+    buffer = await context.decodeAudioData(await file.arrayBuffer());
+  } catch {
+    throw new MediaError("could not be decoded by this browser", "unsupported");
+  }
+  return { sampleRate: buffer.sampleRate, channels: Array.from({ length: buffer.numberOfChannels }, (_, c) => buffer.getChannelData(c)) };
+}

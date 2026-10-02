@@ -1,6 +1,6 @@
 {
   "name": "mm-toolkit-web",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "private": true,
   "description": "MM Toolkit in the browser: promo videos, clip cutting and media conversion, fully client-side.",
   "type": "module",
@@ -45,6 +45,9 @@
     "vitest": "^5.0.3"
   },
   "dependencies": {
+    "@mediabunny/aac-encoder": "^1.61.0",
+    "@mediabunny/flac-encoder": "^1.61.0",
+    "@mediabunny/mp3-encoder": "^1.61.0",
     "client-zip": "^2.5.1",
     "fast-png": "^8.0.0",
     "mediabunny": "^1.61.0"

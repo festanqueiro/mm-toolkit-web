@@ -8,6 +8,9 @@
 import { ALL_FORMATS, AudioSampleSink, BlobSource, Input } from "mediabunny";
 import { extensionOf } from "../media-kind";
 import { decodeAiff, isAiff, type PcmAudio } from "./aiff";
+import { registerFlacDecoder } from "./flac-decoder";
+
+registerFlacDecoder();
 
 export type { PcmAudio };
 
@@ -50,6 +53,27 @@ function slice(pcm: PcmAudio, range?: DecodeRange): PcmAudio {
   return { sampleRate: pcm.sampleRate, channels: pcm.channels.map((c) => c.slice(from, to)) };
 }
 
+/**
+ * No decoded audio for this long means the decoder has hung: some engines report support and
+ * then never produce a sample (WebKitGTK's GStreamer Vorbis), which `canDecode()` can't reveal.
+ */
+export let DECODE_STALL_MS = 15_000;
+
+/** Tests only: shorten the stall timeout. */
+export function setDecodeStallMs(ms: number): void {
+  DECODE_STALL_MS = ms;
+}
+
+/** `iterator.next()`, or null when nothing arrives within `ms`. */
+async function nextWithin<T>(iterator: AsyncIterator<T>, ms: number): Promise<IteratorResult<T> | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([iterator.next(), new Promise<null>((resolve) => (timer = setTimeout(() => resolve(null), ms)))]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function decodeWithMediabunny(blob: Blob, range?: DecodeRange): Promise<PcmAudio> {
   const input = new Input({ source: new BlobSource(blob), formats: ALL_FORMATS });
   try {
@@ -67,7 +91,15 @@ async function decodeWithMediabunny(blob: Blob, range?: DecodeRange): Promise<Pc
     const end = range ? range.start + range.duration : Infinity;
     const chunks: { offset: number; planes: Float32Array[] }[] = [];
     let total = 0;
-    for await (const sample of new AudioSampleSink(track).samples(start, end)) {
+    const samples = new AudioSampleSink(track).samples(start, end);
+    for (;;) {
+      const next = await nextWithin(samples, DECODE_STALL_MS);
+      if (!next) {
+        void samples.return(undefined).catch(() => {});
+        throw new AudioDecodeError(`uses a codec (${track.codec ?? "unknown"}) this browser can't decode`, "unsupported");
+      }
+      if (next.done) break;
+      const sample = next.value;
       const offset = Math.round((sample.timestamp - start) * sampleRate);
       const skip = Math.max(0, -offset);
       const limit = range ? Math.round(range.duration * sampleRate) : Infinity;
