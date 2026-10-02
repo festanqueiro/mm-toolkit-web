@@ -7,6 +7,9 @@ export type Route = {
   subtitle: string;
 };
 
+/** The landing page (`#/` or no hash): not a tab, the brand logo links to it. */
+export const HOME_ROUTE: Route = { path: "", label: "Home", icon: "music_video", subtitle: "" };
+
 /** Tabs in desktop order (spec 09). */
 export const routes: readonly Route[] = [
   {
@@ -39,8 +42,9 @@ export const routes: readonly Route[] = [
   { path: "about", label: "About", icon: "info", subtitle: "" },
 ];
 
-export const DEFAULT_ROUTE = routes[0]!;
+export const DEFAULT_ROUTE = HOME_ROUTE;
 
+/** Unknown hashes land on Home. */
 export function routeFromHash(hash: string): Route {
   const path = hash.replace(/^#\/?/, "");
   return routes.find((route) => route.path === path) ?? DEFAULT_ROUTE;

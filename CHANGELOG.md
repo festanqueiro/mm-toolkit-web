@@ -6,6 +6,11 @@ policy in `CLAUDE.md` (patch by default, minor/major only when requested).
 
 ## [Unreleased]
 
+## [0.1.15] - 2026-10-02
+
+### Added
+- **Home** screen: every tool as a card explaining what it can do, one click to open it. The app now opens here, and the logo always brings you back.
+
 ## [0.1.14] - 2026-10-02
 
 ### Added

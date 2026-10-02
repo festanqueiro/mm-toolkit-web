@@ -4,6 +4,7 @@
   import { routeFromHash, routes } from "./routes";
   import About from "./tabs/About.svelte";
   import History from "./tabs/History.svelte";
+  import Home from "./tabs/Home.svelte";
   import MediaConverter from "./tabs/converter/MediaConverter.svelte";
   import MediaCutter from "./tabs/cutter/MediaCutter.svelte";
   import StemSplitter from "./tabs/stems/StemSplitter.svelte";
@@ -27,7 +28,7 @@
   });
 
   $effect(() => {
-    document.title = `${current.label} · MM Toolkit`;
+    document.title = current.path === "" ? "MM Toolkit" : `${current.label} · MM Toolkit`;
   });
 </script>
 
@@ -44,7 +45,7 @@
 <div class="shell">
   <header class="header">
     <div class="header-inner">
-      <a class="brand" href="#/video-creator" aria-label="MM Toolkit home">
+      <a class="brand" href="#/" aria-label="MM Toolkit home" aria-current={current.path === "" ? "page" : undefined}>
         <img src={logo} alt="" width="32" height="32" />
         <span class="wordmark">MM Toolkit</span>
       </a>
@@ -65,7 +66,9 @@
   </header>
 
   <main class="page" id="main" tabindex="-1">
-    {#if current.path === "about"}
+    {#if current.path === ""}
+      <Home />
+    {:else if current.path === "about"}
       <About />
     {:else if current.path === "video-creator"}
       <VideoCreator />
