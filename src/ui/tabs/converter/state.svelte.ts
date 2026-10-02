@@ -166,14 +166,16 @@ class ConverterState {
       warn: (message) => {
         if (!this.warnings.includes(message)) this.warnings = [...this.warnings, message];
       },
+      cancelled: () => this.cancelling,
     });
   }
 
+  /** Works before the worker exists too: the job forwards it as soon as it starts. */
   cancel(): void {
-    if (!this.worker || this.cancelling) return;
+    if (!this.running || this.cancelling) return;
     this.cancelling = true;
     if (this.progress) this.progress = { ...this.progress, status: CONVERT_PROGRESS.cancelling };
-    this.worker.postMessage({ type: "cancel" } satisfies ToolRequest);
+    this.worker?.postMessage({ type: "cancel" } satisfies ToolRequest);
   }
 
   private async record(id: string, sources: File[], format: string, bitrate: string, outputs: OutputRef[], directory: boolean) {

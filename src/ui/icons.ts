@@ -6,6 +6,7 @@ import deleteIcon from "../../assets/material-icons/delete.svg?raw";
 import dragIndicator from "../../assets/material-icons/drag_indicator.svg?raw";
 import expandMore from "../../assets/material-icons/expand_more.svg?raw";
 import folderOpen from "../../assets/material-icons/folder_open.svg?raw";
+import graphicEq from "../../assets/material-icons/graphic_eq.svg?raw";
 import history from "../../assets/material-icons/history.svg?raw";
 import image from "../../assets/material-icons/image.svg?raw";
 import info from "../../assets/material-icons/info.svg?raw";
@@ -29,6 +30,7 @@ export const icons = {
   drag_indicator: withCurrentColor(dragIndicator),
   expand_more: withCurrentColor(expandMore),
   folder_open: withCurrentColor(folderOpen),
+  graphic_eq: withCurrentColor(graphicEq),
   history: withCurrentColor(history),
   image: withCurrentColor(image),
   info: withCurrentColor(info),

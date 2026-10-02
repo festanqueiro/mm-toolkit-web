@@ -28,6 +28,12 @@ export const routes: readonly Route[] = [
     icon: "swap_horiz",
     subtitle: "Convert batches of audio or video files into another common format.",
   },
+  {
+    path: "stems",
+    label: "Stem Splitter",
+    icon: "graphic_eq",
+    subtitle: "Split a song into vocals, drums, bass and other instruments. Everything runs on this device.",
+  },
   { path: "history", label: "History", icon: "history", subtitle: "Recent jobs are stored only in this browser." },
   { path: "settings", label: "Settings", icon: "settings", subtitle: "Defaults shared by all Media Tools features." },
   { path: "about", label: "About", icon: "info", subtitle: "" },

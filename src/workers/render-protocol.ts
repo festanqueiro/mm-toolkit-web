@@ -1,6 +1,7 @@
 /** Messages between a tool and its job Worker (`render.worker.ts`, `job.worker.ts`). */
 import type { ClipJob } from "../engine/render/clips";
 import type { ConvertJob } from "../engine/render/convert";
+import type { StemJob } from "../engine/render/stems";
 import type { PromoJob } from "../engine/render/promo";
 import type { OutputRef } from "../io/sink";
 
@@ -9,7 +10,7 @@ export type RenderDestination = { kind: "directory"; handle: FileSystemDirectory
 export type JobRequest<J> = { type: "start"; job: J; destination: RenderDestination } | { type: "cancel" };
 export type RenderRequest = JobRequest<PromoJob>;
 /** `job.worker.ts` runs either tool's job. */
-export type ToolJob = { tool: "clips"; job: ClipJob } | { tool: "convert"; job: ConvertJob };
+export type ToolJob = { tool: "clips"; job: ClipJob } | { tool: "convert"; job: ConvertJob } | { tool: "stems"; job: StemJob };
 export type ToolRequest = JobRequest<ToolJob>;
 
 /** The Worker can't decode a source's audio; the page decodes it and retries (resuming at `index`). */

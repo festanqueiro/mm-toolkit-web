@@ -19,6 +19,7 @@ Specs for porting MM Toolkit (desktop v1.0.2, commit `a0c8576`) to a fully clien
 | 12 | [Testing & parity](12-testing-and-parity.md) | Golden fixtures, ported tests, definition of done |
 | 13 | [Hosting, CI & release](13-hosting-ci-release.md) | Static hosting, headers, conventions, workflows |
 | 14 | [Roadmap](14-roadmap.md) | Phases, open decisions (ADRs), backlog |
+| 15 | [Stem Splitter](15-stem-splitter.md) | Web-only: HT-Demucs stems on the device |
 
 Background research: [`../research/browser-feasibility.md`](../research/browser-feasibility.md).
 Desktop source snapshot: [`../reference/`](../reference/).

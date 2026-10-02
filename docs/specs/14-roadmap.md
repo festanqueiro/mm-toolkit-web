@@ -69,6 +69,7 @@ Separate a track into stems (vocals, drums, bass, other), fully client-side like
 - **UI sketch:** a source picker, stem preset (2-stem vocals/accompaniment or 4-stem), output format (reuses Converter formats), a per-stem preview/solo player, and Export.
 - **Hosting:** model files on GitHub Pages count toward its limits (100 MB per file, ~1 GB site). Split or quantise the weights, or host them on a CDN that sends CORS/CORP headers. That still counts as static file serving, with no server-side processing.
 - Phase: after `1.0.0` (desktop parity), unless prioritised earlier.
+- [x] **Shipped** (0.1.14, prioritised 2026-10-02): HT-Demucs v4 forward-only export (MIT) from Hugging Face, WebGPU/WASM via onnxruntime-web, streaming overlap-add, any audio format out. See [15](15-stem-splitter.md).
 
 ## Web-only ideas
 

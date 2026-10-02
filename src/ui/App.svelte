@@ -6,6 +6,7 @@
   import History from "./tabs/History.svelte";
   import MediaConverter from "./tabs/converter/MediaConverter.svelte";
   import MediaCutter from "./tabs/cutter/MediaCutter.svelte";
+  import StemSplitter from "./tabs/stems/StemSplitter.svelte";
   import Placeholder from "./tabs/Placeholder.svelte";
   import Settings from "./tabs/Settings.svelte";
   import VideoCreator from "./tabs/video-creator/VideoCreator.svelte";
@@ -72,6 +73,8 @@
       <MediaCutter />
     {:else if current.path === "converter"}
       <MediaConverter />
+    {:else if current.path === "stems"}
+      <StemSplitter />
     {:else if current.path === "history"}
       <History />
     {:else if current.path === "settings"}

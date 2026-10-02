@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
 
-const tabs = ["Video Creator", "Media Cutter", "Media Converter", "History", "Settings", "About"];
+const tabs = ["Video Creator", "Media Cutter", "Media Converter", "Stem Splitter", "History", "Settings", "About"];
 
-test("shows all tabs in desktop order and defaults to Video Creator", async ({ page }) => {
+test("shows all tabs (desktop order, then web-only tools) and defaults to Video Creator", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("navigation", { name: "Tools" }).getByRole("link")).toHaveText(tabs);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Video Creator");

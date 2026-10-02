@@ -3,7 +3,7 @@ import { dbClear, dbEntries, dbDelete, dbSet } from "./db";
 
 export const HISTORY_LIMIT = 20;
 
-export type HistoryRecord = { id: string; tool: "promo" | "clips" | "converter"; created: string } & Record<string, unknown>;
+export type HistoryRecord = { id: string; tool: "promo" | "clips" | "converter" | "stems"; created: string } & Record<string, unknown>;
 
 /** Local ISO timestamp with seconds precision, like desktop `datetime.now().isoformat(timespec="seconds")`. */
 export function localTimestamp(date = new Date()): string {

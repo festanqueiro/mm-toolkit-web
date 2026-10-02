@@ -30,7 +30,8 @@ const CSP = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' blob: data:",
   "media-src 'self' blob:",
-  "connect-src 'self' blob: data:",
+  // The Stem Splitter downloads its model from Hugging Face (spec 15); no user data is sent.
+  "connect-src 'self' blob: data: https://huggingface.co https://*.hf.co",
   "object-src 'none'",
   "base-uri 'self'",
 ].join("; ");

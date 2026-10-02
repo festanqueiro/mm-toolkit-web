@@ -1,9 +1,9 @@
 /** History tab rules (spec 07), free of DOM/Svelte. Strings are the desktop's. */
 
-export type HistoryTool = "promo" | "clips" | "converter";
+export type HistoryTool = "promo" | "clips" | "converter" | "stems";
 
-export const TOOL_LABELS: Record<HistoryTool, string> = { promo: "Video Creator", clips: "Media Cutter", converter: "Media Converter" };
-export const TOOL_ROUTES: Record<HistoryTool, string> = { promo: "video-creator", clips: "cutter", converter: "converter" };
+export const TOOL_LABELS: Record<HistoryTool, string> = { promo: "Video Creator", clips: "Media Cutter", converter: "Media Converter", stems: "Stem Splitter" };
+export const TOOL_ROUTES: Record<HistoryTool, string> = { promo: "video-creator", clips: "cutter", converter: "converter", stems: "stems" };
 
 /** A file or folder reference as stored in History (`{ name, … }`), or legacy/absent. */
 type NamedRef = { name?: unknown } | null | undefined;
@@ -36,6 +36,7 @@ export function reselectNames(record: Record<string, unknown>): string[] {
     case "promo":
       return [refName(record.source), refName(record.cover)].filter((n): n is string => !!n);
     case "clips":
+    case "stems":
       return [refName(record.source)].filter((n): n is string => !!n);
     case "converter": {
       const sources = Array.isArray(record.sources) ? record.sources.map(refName) : [refName(record.source)];
