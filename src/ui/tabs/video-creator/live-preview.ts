@@ -201,7 +201,16 @@ export class LivePreview {
     source.onended = () => (playback.stopped = true);
 
     const frameCount = Math.max(1, Math.floor(params.duration * params.fps));
-    const clock = () => this.audio!.currentTime - t0;
+    // Follow the audio clock. If it doesn't move (no output device, e.g. a headless or
+    // muted system), fall back to wall time so the picture still plays.
+    const audio = this.audio;
+    const wallStart = performance.now() / 1000 + 0.05;
+    let stalled = false;
+    const clock = () => {
+      const wall = performance.now() / 1000 - wallStart;
+      if (!stalled && wall > 0.5 && audio.currentTime <= t0) stalled = true;
+      return stalled ? wall : audio.currentTime - t0;
+    };
     const nextPaint = () => new Promise((resolve) => requestAnimationFrame(resolve));
     const visualDuration = this.scene.visual.kind === "video" ? this.scene.visual.duration : 0;
     const times = function* () {
