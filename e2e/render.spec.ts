@@ -1,18 +1,10 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { expect, test, type Page } from "@playwright/test";
-import { ALL_FORMATS, BufferSource, Input } from "mediabunny";
+import { mockFolderPicker, opfsFile, opfsNames, probe } from "./helpers";
 
 const golden = (name: string) => fileURLToPath(new URL(`../fixtures/golden/${name}`, import.meta.url));
 const media = (name: string) => fileURLToPath(new URL(`../fixtures/media/${name}`, import.meta.url));
-
-/** Chromium exports into a folder: back the picker with an OPFS directory the test can read. */
-async function mockFolderPicker(page: Page) {
-  await page.addInitScript(() => {
-    (window as unknown as { showDirectoryPicker: () => Promise<FileSystemDirectoryHandle> }).showDirectoryPicker = async () =>
-      (await navigator.storage.getDirectory()).getDirectoryHandle("exports-test", { create: true });
-  });
-}
 
 async function setUp(page: Page, browserName: string, duration = "2") {
   if (browserName === "chromium") await mockFolderPicker(page);
@@ -34,36 +26,6 @@ async function setUp(page: Page, browserName: string, duration = "2") {
     await expect(page.getByTestId("output-status")).toHaveText("✓ Export folder is writable.");
   }
   await expect(page.getByTestId("requirements")).toHaveText("✓ Ready to generate videos.");
-}
-
-/** Bytes of an exported file in the mocked OPFS folder (Chromium). */
-const opfsFile = (page: Page, name: string) =>
-  page.evaluate(async (name) => {
-    const dir = await (await navigator.storage.getDirectory()).getDirectoryHandle("exports-test");
-    const file = await (await dir.getFileHandle(name)).getFile();
-    let binary = "";
-    for (const byte of new Uint8Array(await file.arrayBuffer())) binary += String.fromCharCode(byte);
-    return btoa(binary);
-  }, name);
-
-const opfsNames = (page: Page) =>
-  page.evaluate(async () => {
-    const dir = await (await navigator.storage.getDirectory()).getDirectoryHandle("exports-test", { create: true });
-    const names: string[] = [];
-    for await (const key of (dir as unknown as { keys: () => AsyncIterable<string> }).keys()) names.push(key);
-    return names.sort();
-  });
-
-async function probe(bytes: Uint8Array) {
-  const input = new Input({ source: new BufferSource(bytes), formats: ALL_FORMATS });
-  const video = await input.getPrimaryVideoTrack();
-  const audio = await input.getPrimaryAudioTrack();
-  return {
-    duration: await input.computeDuration(),
-    width: video?.displayWidth,
-    height: video?.displayHeight,
-    audio: audio ? { channels: audio.numberOfChannels, sampleRate: audio.sampleRate } : null,
-  };
 }
 
 test("renders a promo MP4 with the snippet's duration, the visual's size and stereo audio", async ({ page, browserName }) => {

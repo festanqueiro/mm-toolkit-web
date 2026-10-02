@@ -12,6 +12,8 @@
   import { filesFromDrop, pickFiles } from "../../../io/pick";
   import Icon from "../../Icon.svelte";
   import Accordion from "../../components/Accordion.svelte";
+  import DropZone from "../../components/DropZone.svelte";
+  import JobFooter from "../../components/JobFooter.svelte";
   import Modal from "../../components/Modal.svelte";
   import PageHeader from "../../components/PageHeader.svelte";
   import { routes } from "../../routes";
@@ -53,7 +55,7 @@
   const visualOk = $derived(vc.visual?.ok === true);
   const downstreamReady = $derived(musicOk && visualOk && !vc.running);
   /** Tier 2 exports through Downloads (always available); Tier 1 needs a folder with write permission. */
-  const outputOk = $derived(!app.capabilities?.directoryPicker || (vc.output !== null && vc.outputPermission === "granted"));
+  const outputOk = $derived(vc.folder.ok);
   const isVideo = $derived(vc.visual?.ok === true && vc.visual.kind === "video");
   let previewOpen = $state(true);
   const req = $derived(
@@ -82,22 +84,12 @@
     if (picked.files[0]) await vc.setVisual(picked.files[0].file);
   }
 
-  let dragTarget = $state<"audio" | "visual" | null>(null);
-  const dragOver = (target: "audio" | "visual") => (event: DragEvent) => {
-    if (vc.running || !event.dataTransfer?.types.includes("Files")) return;
-    event.preventDefault();
-    dragTarget = target;
-  };
-  async function dropAudio(event: DragEvent) {
-    event.preventDefault();
-    dragTarget = null;
-    if (event.dataTransfer && !vc.running) vc.setAudio(await filesFromDrop(event.dataTransfer));
+  async function dropAudio(transfer: DataTransfer) {
+    vc.setAudio(await filesFromDrop(transfer));
   }
-  async function dropVisual(event: DragEvent) {
-    event.preventDefault();
-    dragTarget = null;
-    const file = event.dataTransfer?.files[0];
-    if (file && !vc.running) await vc.setVisual(file);
+  async function dropVisual(transfer: DataTransfer) {
+    const file = transfer.files[0];
+    if (file) await vc.setVisual(file);
   }
 
   // ---- Drop detection dialog ----
@@ -141,62 +133,40 @@
   <div class="column">
     <Accordion title="Input" open={leftOpen === "input"} ontoggle={() => toggleLeft("input")} disabled={vc.running}>
       <div class="zones">
-        <div
-          class="zone"
-          class:filled={musicOk}
-          class:dragging={dragTarget === "audio"}
-          role="group"
-          aria-labelledby="audio-label"
-          ondragover={dragOver("audio")}
-          ondragleave={() => (dragTarget = null)}
-          ondrop={dropAudio}
-        >
-          <span class="zone-icon" aria-hidden="true"><Icon name={vc.audio?.folder ? "folder_open" : "audiotrack"} size={26} /></span>
-          <div class="zone-body">
-            <span class="zone-title" id="audio-label">Audio</span>
-            {#if vc.audio}
-              <span class="zone-file" title={vc.audio.label}>{vc.audio.label}</span>
-              <p class="status" class:ok={musicOk} class:warn={!musicOk} data-testid="audio-status">{audioStatus(vc.trackCount, true)}</p>
-            {:else}
-              <span class="zone-hint">Drop an audio file or a folder here</span>
-            {/if}
-          </div>
-          <div class="zone-actions">
+        <DropZone title="Audio" filled={musicOk} disabled={vc.running} ondropped={dropAudio}>
+          {#snippet icon()}<span class="tile" aria-hidden="true"><Icon name={vc.audio?.folder ? "folder_open" : "audiotrack"} size={26} /></span>{/snippet}
+          {#if vc.audio}
+            <span class="zone-file" title={vc.audio.label}>{vc.audio.label}</span>
+            <p class="status" class:ok={musicOk} class:warn={!musicOk} data-testid="audio-status">{audioStatus(vc.trackCount, true)}</p>
+          {:else}
+            <span class="zone-hint">Drop an audio file or a folder here</span>
+          {/if}
+          {#snippet actions()}
             <button type="button" class="btn" onclick={chooseAudioFile}>Choose File…</button>
             <button type="button" class="btn" onclick={chooseAudioFolder}>Choose Folder…</button>
-          </div>
-        </div>
+          {/snippet}
+        </DropZone>
 
-        <div
-          class="zone"
-          class:filled={visualOk}
-          class:dragging={dragTarget === "visual"}
-          role="group"
-          aria-labelledby="visual-label"
-          ondragover={dragOver("visual")}
-          ondragleave={() => (dragTarget = null)}
-          ondrop={dropVisual}
-        >
-          {#if vc.visual?.ok}
-            <span class="thumb"><img src={vc.visual.thumbnail} alt="Preview of {vc.visualFile?.name}" /></span>
-          {:else}
-            <span class="zone-icon" aria-hidden="true"><Icon name="image" size={26} /></span>
-          {/if}
-          <div class="zone-body">
-            <span class="zone-title" id="visual-label">Image or video</span>
-            {#if vc.visualFile}
-              <span class="zone-file" title={vc.visualFile.name}>{vc.visualFile.name}</span>
+        <DropZone title="Image or video" filled={visualOk} disabled={vc.running} ondropped={dropVisual}>
+          {#snippet icon()}
+            {#if vc.visual?.ok}
+              <span class="thumb"><img src={vc.visual.thumbnail} alt="Preview of {vc.visualFile?.name}" /></span>
             {:else}
-              <span class="zone-hint">Drop an image or video here</span>
+              <span class="tile" aria-hidden="true"><Icon name="image" size={26} /></span>
             {/if}
-            {#if visualStatus}
-              <p class="status" class:ok={vc.visual?.ok} class:warn={vc.visual && !vc.visual.ok} data-testid="visual-status">{visualStatus}</p>
-            {/if}
-          </div>
-          <div class="zone-actions">
+          {/snippet}
+          {#if vc.visualFile}
+            <span class="zone-file" title={vc.visualFile.name}>{vc.visualFile.name}</span>
+          {:else}
+            <span class="zone-hint">Drop an image or video here</span>
+          {/if}
+          {#if visualStatus}
+            <p class="status" class:ok={vc.visual?.ok} class:warn={vc.visual && !vc.visual.ok} data-testid="visual-status">{visualStatus}</p>
+          {/if}
+          {#snippet actions()}
             <button type="button" class="btn" onclick={chooseVisual}>Choose…</button>
-          </div>
-        </div>
+          {/snippet}
+        </DropZone>
       </div>
     </Accordion>
 
@@ -269,29 +239,18 @@
   </div>
 </div>
 
-<footer class="action-bar">
-  {#if vc.progress}
-    <div class="progress-row">
-      <p class="progress-status" data-testid="progress-status" aria-live="polite">{vc.progress.status}</p>
-      {#if vc.running}
-        <progress max="100" value={vc.progress.percent} aria-label="Generation progress">{vc.progress.percent}%</progress>
-      {/if}
-    </div>
-  {/if}
-  {#each vc.warnings as warning (warning)}
-    <p class="status warn progress-row">{warning}</p>
-  {/each}
-  <div class="actions">
-    <button type="button" class="btn ghost" disabled={vc.running} onclick={() => vc.clear()}>Clear</button>
-    {#if vc.running}
-      <button type="button" class="btn" disabled={vc.cancelling} onclick={() => vc.cancel()}>Cancel</button>
-    {/if}
-    <p class="requirements" class:ok={req.ready} data-testid="requirements" aria-live="polite">{req.message}</p>
-    <button type="button" class="btn primary generate" disabled={!req.ready} title={req.message} onclick={() => vc.generate()}>
-      {generateLabel(vc.trackCount)}
-    </button>
-  </div>
-</footer>
+<JobFooter
+  progress={vc.progress}
+  running={vc.running}
+  cancelling={vc.cancelling}
+  warnings={vc.warnings}
+  requirement={req}
+  label={generateLabel(vc.trackCount)}
+  progressLabel="Generation progress"
+  onclear={() => vc.clear()}
+  oncancel={() => vc.cancel()}
+  onstart={() => vc.generate()}
+/>
 
 <Modal title="Generation failed" open={vc.failure !== null} onclose={() => (vc.failure = null)}>
   <p>{vc.failure?.message}</p>
@@ -349,52 +308,7 @@
     display: grid;
     gap: 12px;
   }
-  .zone {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    grid-template-areas: "icon body" "actions actions";
-    gap: 10px 14px;
-    align-items: center;
-    padding: 14px;
-    border: 1.5px dashed var(--border-strong);
-    border-radius: var(--radius);
-    background: var(--surface-sunken);
-    transition:
-      border-color 0.15s,
-      background-color 0.15s;
-  }
-  @media (min-width: 560px) {
-    .zone {
-      grid-template-columns: auto minmax(0, 1fr) auto;
-      grid-template-areas: "icon body actions";
-    }
-  }
-  .zone.filled {
-    border-style: solid;
-    border-color: var(--border);
-    background: var(--surface);
-  }
-  .zone.dragging {
-    border-color: var(--accent);
-    border-style: dashed;
-    background: var(--accent-soft);
-  }
-  .zone-icon {
-    grid-area: icon;
-    display: grid;
-    place-items: center;
-    width: 52px;
-    height: 52px;
-    border-radius: 12px;
-    color: var(--link);
-    background: color-mix(in srgb, var(--brand-blue) 18%, transparent);
-  }
-  .filled .zone-icon {
-    color: var(--accent);
-    background: var(--accent-soft);
-  }
   .thumb {
-    grid-area: icon;
     display: grid;
     place-items: center;
     width: 72px;
@@ -407,33 +321,6 @@
   .thumb img {
     max-width: 100%;
     max-height: 100%;
-  }
-  .zone-body {
-    grid-area: body;
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-  }
-  .zone-title {
-    font-weight: 700;
-  }
-  .zone-file {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .zone-hint {
-    color: var(--text-muted);
-    font-size: 0.92rem;
-  }
-  .zone-body .status {
-    margin-top: 2px;
-  }
-  .zone-actions {
-    grid-area: actions;
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
   }
   .form {
     display: grid;
@@ -457,76 +344,11 @@
     flex-wrap: wrap;
     align-items: center;
   }
-  .action-bar {
-    position: sticky;
-    bottom: 12px;
-    z-index: 10;
-    display: grid;
-    gap: 8px;
-    margin-top: 18px;
-    padding: 10px 12px 10px 10px;
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    background: color-mix(in srgb, var(--surface) 88%, transparent);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    box-shadow: var(--shadow-md);
-  }
-  .actions {
-    display: flex;
-    gap: 12px;
-    align-items: center;
-  }
-  .progress-row {
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    margin: 0 4px;
-  }
-  .progress-status {
-    margin: 0;
-    font-weight: 600;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  progress {
-    flex: 1;
-    height: 8px;
-    accent-color: var(--accent);
-  }
   pre {
     max-height: 200px;
     overflow: auto;
     font-size: 0.8rem;
     white-space: pre-wrap;
-  }
-  .requirements {
-    flex: 1;
-    margin: 0;
-    color: var(--text-muted);
-    font-size: 0.93rem;
-  }
-  .requirements.ok {
-    color: var(--ok);
-    font-weight: 600;
-  }
-  .generate {
-    min-height: 44px;
-    padding: 0 22px;
-    border-radius: 12px;
-  }
-  @media (max-width: 560px) {
-    .actions {
-      flex-wrap: wrap;
-    }
-    .requirements {
-      order: -1;
-      flex-basis: 100%;
-    }
-    .generate {
-      flex: 1;
-    }
   }
   .lead-in {
     display: grid;

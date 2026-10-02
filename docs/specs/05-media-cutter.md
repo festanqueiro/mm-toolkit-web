@@ -67,11 +67,21 @@ Two columns (≈ 5 : 4).
 
 ### Web implementation notes
 
-- **WAV/AIFF**: decode → slice samples → write 24-bit PCM in TS. Instant.
-- **AAC/M4A**: WebCodecs `AudioEncoder` where supported, else WASM.
-- **MP3/FLAC/OGG(Vorbis)**: WASM (audio-only, small). Lossy → lossy re-encodes, as desktop already does.
-- **Video**: Mediabunny conversion with a trim range + WebCodecs H.264/AAC re-encode. Use the quality mapping from [04](04-video-creator.md#output-and-encoding) with a fixed "High" profile, since desktop exposes no quality control here.
-- **Progress**: `round((i + fraction) / n * 100)`, where `fraction` = encoded media time / clip duration.
+The job runs in `workers/cut.worker.ts` (`engine/render/clips.ts`). Every clip is re-encoded like the desktop; Mediabunny's `Conversion` streams decode → trim → encode → mux with `tracks: "primary"` (first video + first audio stream).
+
+- **WAV**: `pcm-s24` through Mediabunny's WAV muxer.
+- **AIFF**: Mediabunny has no AIFF demuxer, so AIFF is read, sliced and written (24-bit BE) in TS (`engine/media/aiff.ts`).
+- **AAC/M4A**: WebCodecs `AudioEncoder` where supported, else the WASM `@mediabunny/aac-encoder` (Firefox).
+- **MP3**: WASM `@mediabunny/mp3-encoder` (LAME), 320 kbps. **FLAC**: WASM `@mediabunny/flac-encoder`; a 16-bit source stays 16-bit (FFmpeg keeps the source depth), deeper sources become 24-bit. No browser encodes either natively.
+- **FLAC decode** uses a TS decoder (`engine/media/flac-decoder.ts`) in every engine: WebKit claims WebCodecs FLAC support but fails at runtime.
+- **Video**: H.264 at the "High" bits-per-pixel preset from [04](04-video-creator.md#output-and-encoding) (source size and frame rate), since desktop exposes no quality control here. AAC 256 kbps. Where H.264 can't be encoded, VP9/AV1 in MP4 with a warning.
+- **Progress**: `round((i + fraction) / n * 100)`, where `fraction` is the conversion's progress through the clip.
+
+**Documented deviations**
+
+- **OGG** clips are **Opus 256 kbps in Ogg**, not Vorbis q8: no Vorbis encoder exists for the web without ffmpeg.wasm. Interim until ADR-003 decides.
+- A clip whose start is at or past the end of the source fails with `Clip {n} starts after the end of {source}.` (FFmpeg would write an empty file). A clip running past the end is clamped, like FFmpeg `-t`.
+- Odd video dimensions are rounded down to even for 4:2:0 (libx264 would refuse them).
 
 ### Preview playability
 
@@ -80,16 +90,18 @@ Two columns (≈ 5 : 4).
 1. Audio: decode to PCM, play via Web Audio, and show a **waveform** timeline in place of the native player.
 2. Video: show WebCodecs-decoded thumbnails while scrubbing, or offer a one-off "Create preview proxy" (WASM transcode to a low-res MP4).
 
-Cutting still works even when preview doesn't.
+Cutting still works even when preview doesn't. **Status:** only the native player ships so far. An unplayable source shows `This browser can't preview {name}. You can still type timestamps and create clips.` and disables the transport; the fallbacks above are still to do (roadmap Phase 3).
 
 ## Persistence
 
 `clips/source`, `clips/output` are saved on Create and removed on Clear. Clear also resets the table to one empty row and the export folder to the Settings default.
 
+Web: only `clips/output` is saved for now. Sources aren't re-openable until input persistence lands (same as the Video Creator).
+
 ## History record
 
 ```json
-{ "tool": "clips", "created": "…", "source": "<ref>", "output": "<ref>",
+{ "tool": "clips", "created": "…", "source": { "name": "…", "size": 0, "lastModified": 0 }, "output": "<ref>",
   "clips": [{ "title": "Intro", "start": 12.0, "duration": 30.0 }], "outputs": ["<refs>"] }
 ```
 

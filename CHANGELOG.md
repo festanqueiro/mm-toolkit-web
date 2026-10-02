@@ -6,6 +6,20 @@ policy in `CLAUDE.md` (patch by default, minor/major only when requested).
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-10-02
+
+### Added
+- **Media Cutter** tab: cut audio or video into precisely timed clips, fully in a Worker.
+  - Source picker with drag & drop, a native player with a timeline, Play/Pause, and **Set Start / Set End** into the current row (`Editing: {clip}`).
+  - Clip table: Title / Start / End / Duration, ▶ preview that stops at the clip end, remove, **+ Add clip**, and the desktop's validation messages.
+  - Video → H.264 + AAC MP4 at the source size (frame-accurate re-encode). Audio keeps its format: WAV/AIFF as 24-bit PCM, MP3 320k, FLAC, M4A/AAC 320k. OGG is Opus in Ogg until ADR-003 decides on Vorbis.
+  - Naming template and conflict policy, export folder (Chrome/Edge) or Downloads/ZIP, progress, Cancel, the "Clip creation failed" dialog, History records and the "Clips finished" notification.
+- WASM MP3, FLAC and AAC encoders (Mediabunny extensions), loaded only when the browser has no native encoder.
+- A pure-TS FLAC decoder, bit-exact and used in every browser (WebKit's WebCodecs FLAC decoder fails at runtime).
+
+### Changed
+- Shared building blocks for tools: export folder, drop zone, job footer and the Worker job runner (the Video Creator now uses them too).
+
 ## [0.1.8] - 2026-10-02
 
 ### Added

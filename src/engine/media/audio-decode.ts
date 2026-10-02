@@ -8,6 +8,9 @@
 import { ALL_FORMATS, AudioSampleSink, BlobSource, Input } from "mediabunny";
 import { extensionOf } from "../media-kind";
 import { decodeAiff, isAiff, type PcmAudio } from "./aiff";
+import { registerFlacDecoder } from "./flac-decoder";
+
+registerFlacDecoder();
 
 export type { PcmAudio };
 

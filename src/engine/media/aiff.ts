@@ -84,3 +84,57 @@ export function decodeAiff(bytes: ArrayBuffer): PcmAudio {
   }
   return { sampleRate: rate, channels };
 }
+
+/** IEEE 754 80-bit extended (big-endian) for a positive integer-ish sample rate. */
+function writeExtended(view: DataView, offset: number, value: number): void {
+  if (!(value > 0)) {
+    for (let i = 0; i < 10; i++) view.setUint8(offset + i, 0);
+    return;
+  }
+  const exponent = Math.floor(Math.log2(value));
+  const mantissa = value / 2 ** exponent; // in [1, 2)
+  const hi = Math.floor(mantissa * 2 ** 31);
+  const lo = Math.round((mantissa * 2 ** 31 - hi) * 2 ** 32);
+  view.setUint16(offset, exponent + 16383);
+  view.setUint32(offset + 2, hi);
+  view.setUint32(offset + 6, lo);
+}
+
+/**
+ * Plain AIFF, 24-bit big-endian PCM (FFmpeg `pcm_s24be`). Floats scale by 2^23 and clip,
+ * so 16- and 24-bit sources round-trip exactly.
+ */
+export function encodeAiff24(pcm: PcmAudio): Uint8Array {
+  const count = pcm.channels.length;
+  const frames = pcm.channels[0]?.length ?? 0;
+  const dataBytes = frames * count * 3;
+  const pad = dataBytes % 2;
+  const total = 12 + 26 + 16 + dataBytes + pad;
+  const bytes = new Uint8Array(total);
+  const view = new DataView(bytes.buffer);
+  const ascii = (offset: number, text: string) => [...text].forEach((ch, i) => view.setUint8(offset + i, ch.charCodeAt(0)));
+  ascii(0, "FORM");
+  view.setUint32(4, total - 8);
+  ascii(8, "AIFF");
+  ascii(12, "COMM");
+  view.setUint32(16, 18);
+  view.setInt16(20, count);
+  view.setUint32(22, frames);
+  view.setInt16(26, 24);
+  writeExtended(view, 28, pcm.sampleRate);
+  ascii(38, "SSND");
+  view.setUint32(42, 8 + dataBytes);
+  view.setUint32(46, 0);
+  view.setUint32(50, 0);
+  let at = 54;
+  for (let i = 0; i < frames; i++) {
+    for (let c = 0; c < count; c++) {
+      const v = Math.round(pcm.channels[c]![i]! * 8388608);
+      const s = v > 8388607 ? 8388607 : v < -8388608 ? -8388608 : v;
+      bytes[at++] = (s >> 16) & 0xff;
+      bytes[at++] = (s >> 8) & 0xff;
+      bytes[at++] = s & 0xff;
+    }
+  }
+  return bytes;
+}

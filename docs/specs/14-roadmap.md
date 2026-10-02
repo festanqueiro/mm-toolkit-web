@@ -10,7 +10,7 @@
 - [ ] Measure the WASM AAC fallback timing.
 - [ ] Confirm Mediabunny's container read/write list, and the ffmpeg.wasm LGPL build options (codecs available without x264).
 - [x] **ADR-001** UI framework → **Svelte 5**. **ADR-002** host → **GitHub Pages** (public repo). Licence → **MIT**.
-- [ ] Decide **ADR-003** (OGG Vorbis vs Opus) and **ADR-004** (keep AVI output?).
+- [ ] Decide **ADR-003** (OGG Vorbis vs Opus) and **ADR-004** (keep AVI output?). Media Cutter writes Opus in Ogg meanwhile (no web Vorbis encoder without ffmpeg.wasm).
 
 ## Phase 1 — Foundations
 
@@ -32,8 +32,8 @@
 
 ## Phase 3 — Media Cutter & Media Converter
 
-- [ ] Cutter: player/timeline, Set Start/End, clip table, WAV/AIFF in TS, AAC via WebCodecs, MP3/FLAC/OGG via WASM, video trim via Mediabunny.
-- [ ] Preview fallbacks (waveform, proxy).
+- [x] Cutter: player/timeline, Set Start/End, clip table, WAV/AIFF in TS, AAC via WebCodecs (WASM fallback), MP3/FLAC via Mediabunny's WASM encoders, video trim via Mediabunny. OGG is Opus-in-Ogg until ADR-003.
+- [ ] Cutter preview fallbacks (waveform, proxy). Today an unplayable source disables the transport with a message.
 - [ ] Converter: the full matrix in [06](06-media-converter.md), WASM size ceiling, batch ZIP.
 
 ## Phase 4 — Polish → `1.0.0`

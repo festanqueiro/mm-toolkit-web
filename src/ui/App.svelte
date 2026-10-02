@@ -3,6 +3,7 @@
   import Icon from "./Icon.svelte";
   import { routeFromHash, routes } from "./routes";
   import About from "./tabs/About.svelte";
+  import MediaCutter from "./tabs/cutter/MediaCutter.svelte";
   import Placeholder from "./tabs/Placeholder.svelte";
   import Settings from "./tabs/Settings.svelte";
   import VideoCreator from "./tabs/video-creator/VideoCreator.svelte";
@@ -61,6 +62,8 @@
       <About />
     {:else if current.path === "video-creator"}
       <VideoCreator />
+    {:else if current.path === "cutter"}
+      <MediaCutter />
     {:else if current.path === "settings"}
       <Settings />
     {:else}

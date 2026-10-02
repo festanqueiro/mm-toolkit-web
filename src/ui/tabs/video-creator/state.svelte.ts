@@ -24,15 +24,17 @@ import {
   type Quality,
   type TrackRow,
 } from "../../../engine/video-creator";
-import { fileRefFromHandle, forgetRef, handleFor, queryPermission, requestPermission, trackIdentity, type FileRef } from "../../../io/file-ref";
+import { trackIdentity, type FileRef } from "../../../io/file-ref";
 import { deliverStaged } from "../../../io/deliver";
 import { decodeImage } from "../../../io/image-decode";
 import { clearAllStaging, type OutputRef } from "../../../io/sink";
 import { addHistory, historyId, localTimestamp } from "../../../storage/history";
-import type { RenderEvent, RenderRequest } from "../../../workers/render-protocol";
+import type { RenderRequest } from "../../../workers/render-protocol";
 import type { Picked } from "../../../io/pick";
 import { probeVisual, type VisualProbe } from "../../../io/visual";
 import { decodeAudioFile, detectDrop } from "../../../workers/media-client";
+import { historyOutputs, notifyFinished, runJob } from "../../job-runner";
+import { OutputFolder } from "../../output-folder.svelte";
 import { app, resetSettings, updateSetting } from "../../state.svelte";
 
 export type AudioSelection = { label: string; folder: boolean; files: File[] };
@@ -61,8 +63,7 @@ class VideoCreatorState {
   muteOriginal = $state(true);
 
   // Output.
-  output = $state<FileRef | null>(null);
-  outputPermission = $state<PermissionState | "none">("none");
+  readonly folder = new OutputFolder("mm-promo-export");
   profile = $state(OUTPUT_DEFAULTS.profile);
   fps = $state(OUTPUT_DEFAULTS.fps);
   quality = $state<Quality>(OUTPUT_DEFAULTS.quality);
@@ -74,9 +75,6 @@ class VideoCreatorState {
   failure = $state<{ message: string; details: string } | null>(null);
   cancelling = $state(false);
   private worker: Worker | null = null;
-  /** The chosen export folder's live handle (persisted copies are only needed after a reload). */
-  private outputHandle: FileSystemDirectoryHandle | null = null;
-  private wakeLock: { release: () => Promise<void> } | null = null;
 
   /** Registered by the live preview so a table ▶ stops it (only one audio preview at a time). */
   stopLivePreview: (() => void) | null = null;
@@ -220,8 +218,7 @@ class VideoCreatorState {
     this.videoFade = s["promo/video_fade"];
     this.audioFade = s["promo/audio_fade"];
     this.muteOriginal = s["promo/mute_original_video_audio"];
-    this.output = s.output ?? s["general/default_output"];
-    void this.refreshOutputPermission();
+    void this.folder.set(s.output ?? s["general/default_output"]);
   }
 
   /** Decode a Background or Overlay image (Pillow-like: exact PNG bytes, no EXIF rotation). */
@@ -237,39 +234,6 @@ class VideoCreatorState {
     }
   }
   private layerTokens: Record<LayerKind, number> = { background: 0, overlay: 0 };
-
-  /** Tier 1: pick a writable export folder (a persisted handle). */
-  async chooseOutput(): Promise<void> {
-    let handle: FileSystemDirectoryHandle;
-    try {
-      handle = await showDirectoryPicker({ id: "mm-promo-export", mode: "readwrite" });
-    } catch (error) {
-      if ((error as DOMException)?.name === "AbortError") return;
-      throw error;
-    }
-    const previous = this.output;
-    this.outputHandle = handle;
-    this.output = await fileRefFromHandle(handle);
-    this.outputPermission = await queryPermission(handle, "readwrite");
-    if (previous && previous.id !== app.settings["general/default_output"]?.id && previous.id !== app.settings.output?.id) await forgetRef(previous);
-  }
-
-  private async currentOutputHandle(): Promise<FileSystemDirectoryHandle | null> {
-    if (this.outputHandle && this.output) return this.outputHandle;
-    this.outputHandle = await handleFor<FileSystemDirectoryHandle>(this.output);
-    return this.outputHandle;
-  }
-
-  async reallowOutput(): Promise<void> {
-    const handle = await this.currentOutputHandle();
-    if (handle && (await requestPermission(handle, "readwrite"))) this.outputPermission = "granted";
-  }
-
-  async refreshOutputPermission(): Promise<void> {
-    this.outputHandle = null;
-    const handle = await this.currentOutputHandle();
-    this.outputPermission = handle ? await queryPermission(handle, "readwrite") : "none";
-  }
 
   /** Generate Video(s): build the job, run it in the render Worker, deliver, record History. */
   async generate(): Promise<void> {
@@ -290,7 +254,7 @@ class VideoCreatorState {
     void updateSetting("promo/video_fade", this.videoFade);
     void updateSetting("promo/audio_fade", this.audioFade);
     void updateSetting("promo/mute_original_video_audio", this.muteOriginal);
-    if (this.output) void updateSetting("output", $state.snapshot(this.output) as FileRef);
+    if (this.folder.ref) void updateSetting("output", $state.snapshot(this.folder.ref) as FileRef);
 
     const jobId = historyId();
     const tier1 = !!app.capabilities?.directoryPicker;
@@ -313,12 +277,17 @@ class VideoCreatorState {
         naming: s["general/promo_naming"],
         conflict: s["general/conflict_policy"],
       };
-      const handle = tier1 ? await this.currentOutputHandle() : null;
+      const handle = tier1 ? await this.folder.current() : null;
       if (tier1 && !handle) throw new Error("Choose a writable export folder.");
-      const outputs = await this.runWorker({
-        type: "start",
-        job,
-        destination: handle ? { kind: "directory", handle } : { kind: "staging", jobId },
+      const worker = new Worker(new URL("../../../workers/render.worker.ts", import.meta.url), { type: "module", name: "render" });
+      this.worker = worker;
+      const outputs = await runJob(worker, { type: "start", job, destination: handle ? { kind: "directory", handle } : { kind: "staging", jobId } } satisfies RenderRequest, {
+        progress: (percent, status) => {
+          if (!this.cancelling) this.progress = { percent, status, outputs: 0 };
+        },
+        warn: (message) => {
+          if (!this.warnings.includes(message)) this.warnings = [...this.warnings, message];
+        },
       });
       if (outputs === null) {
         this.progress = { percent: this.progress?.percent ?? 0, status: "Cancelled. Partial files were removed.", outputs: 0 };
@@ -328,7 +297,7 @@ class VideoCreatorState {
       if (!handle && outputs.length) await deliverStaged(outputs, { zip: s["web/zip_batches"], tool: "Video Creator" });
       await this.record(jobId, effects, options, outputs, !!handle);
       this.progress = { percent: 100, status: `Finished ${outputs.length} video${outputs.length === 1 ? "" : "s"}`, outputs: outputs.length };
-      this.notify(outputs.length);
+      notifyFinished("Promo video", outputs.length);
     } catch (error) {
       const err = error as Error & { details?: string };
       this.failure = { message: err.message, details: err.details ?? err.stack ?? "" };
@@ -337,8 +306,6 @@ class VideoCreatorState {
       this.running = false;
       this.worker?.terminate();
       this.worker = null;
-      void this.wakeLock?.release().catch(() => {});
-      this.wakeLock = null;
     }
   }
 
@@ -347,28 +314,6 @@ class VideoCreatorState {
     this.cancelling = true;
     if (this.progress) this.progress = { ...this.progress, status: "Cancelling safely…" };
     this.worker.postMessage({ type: "cancel" } satisfies RenderRequest);
-  }
-
-  /** Resolves with the outputs, or null when cancelled; rejects on failure. */
-  private runWorker(request: RenderRequest): Promise<OutputRef[] | null> {
-    const nav = navigator as Navigator & { wakeLock?: { request: (type: "screen") => Promise<{ release: () => Promise<void> }> } };
-    nav.wakeLock?.request("screen").then((lock) => (this.wakeLock = lock), () => {});
-    return new Promise((resolve, reject) => {
-      const worker = new Worker(new URL("../../../workers/render.worker.ts", import.meta.url), { type: "module", name: "render" });
-      this.worker = worker;
-      worker.onmessage = (event: MessageEvent<RenderEvent>) => {
-        const e = event.data;
-        if (e.type === "progress") {
-          if (!this.cancelling) this.progress = { percent: e.percent, status: e.status, outputs: 0 };
-        } else if (e.type === "warn") {
-          if (!this.warnings.includes(e.message)) this.warnings = [...this.warnings, e.message];
-        } else if (e.type === "done") resolve(e.outputs);
-        else if (e.type === "cancelled") resolve(null);
-        else reject(Object.assign(new Error(e.message), { details: e.details }));
-      };
-      worker.onerror = (event) => reject(new Error(event.message || "The render worker stopped unexpectedly."));
-      worker.postMessage(request);
-    });
   }
 
   private async record(id: string, effects: EffectSettings, options: { start: number; duration: number }[], outputs: OutputRef[], directory: boolean) {
@@ -380,7 +325,7 @@ class VideoCreatorState {
         created: localTimestamp(),
         source: this.audio ? { name: this.audio.label, kind: this.audio.folder ? "directory" : "file" } : null,
         cover: ref(this.visualFile),
-        output: directory ? $state.snapshot(this.output) : { name: "Downloads" },
+        output: directory ? $state.snapshot(this.folder.ref) : { name: "Downloads" },
         bass_effect: effects.bass_blur.enabled,
         effects: toEffectsState(effects),
         video_fade: this.videoFade,
@@ -391,22 +336,10 @@ class VideoCreatorState {
         profile: PROFILES[this.profile]?.size ?? null,
         quality: this.quality,
         audio_bitrate: this.audioBitrate,
-        // References only: in-memory outputs' bytes don't belong in History.
-        outputs: outputs.map((ref) => ({ name: ref.name, sink: ref.sink, size: ref.size, opfsPath: ref.opfsPath })),
+        outputs: historyOutputs(outputs),
       });
     } catch {
       // History is best effort (storage may be unavailable).
-    }
-  }
-
-  /** Desktop completion signal: "Promo video finished" / "Created {n} file{s}." */
-  private notify(count: number): void {
-    if (!app.settings["general/notify_finished"] || typeof Notification === "undefined" || Notification.permission !== "granted") return;
-    try {
-      const n = new Notification("Promo video finished", { body: count ? `Created ${count} file${count === 1 ? "" : "s"}.` : "Finished.", icon: "favicon.png" });
-      n.onclick = () => window.focus();
-    } catch {
-      // Some browsers only allow notifications from a service worker.
     }
   }
 
@@ -426,8 +359,7 @@ class VideoCreatorState {
     void this.setLayerImage("background", null);
     void this.setLayerImage("overlay", null);
     this.videoFade = this.audioFade = this.muteOriginal = true;
-    this.output = app.settings["general/default_output"];
-    void this.refreshOutputPermission();
+    void this.folder.set(app.settings["general/default_output"]);
     this.profile = OUTPUT_DEFAULTS.profile;
     this.fps = OUTPUT_DEFAULTS.fps;
     this.quality = OUTPUT_DEFAULTS.quality;

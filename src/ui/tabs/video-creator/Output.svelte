@@ -8,15 +8,12 @@
     OUTPUT_STATUS,
     PROFILES,
     QUALITIES,
-    reallowFolder,
     type TrackOption,
   } from "../../../engine/video-creator";
-  import { app } from "../../state.svelte";
+  import ExportFolder from "../../components/ExportFolder.svelte";
   import { vc } from "./state.svelte";
 
   let { disabled = false, tracks }: { disabled?: boolean; tracks: TrackOption[] } = $props();
-
-  const tier1 = $derived(app.capabilities?.directoryPicker ?? false);
 
   function commitFps(input: HTMLInputElement) {
     const value = Math.round(Number(input.value));
@@ -28,25 +25,7 @@
 <div class="form">
   <span class="label" id="export-label">Export folder</span>
   <div class="field">
-    {#if tier1}
-      <div class="row">
-        <input class="input path" readonly aria-labelledby="export-label" placeholder="Nothing selected" value={vc.output?.name ?? ""} />
-        <button type="button" class="btn" {disabled} onclick={() => vc.chooseOutput()}>Choose…</button>
-      </div>
-      {#if vc.output}
-        {#if vc.outputPermission === "granted"}
-          <p class="status ok" data-testid="output-status">{OUTPUT_STATUS.writable}</p>
-        {:else if vc.outputPermission === "prompt"}
-          <p class="status" data-testid="output-status">
-            <button type="button" class="link" onclick={() => vc.reallowOutput()}>{reallowFolder(vc.output.name)}</button>
-          </p>
-        {:else}
-          <p class="status warn" data-testid="output-status">{OUTPUT_STATUS.notWritable}</p>
-        {/if}
-      {/if}
-    {:else}
-      <p class="status value" data-testid="output-status">{OUTPUT_STATUS.downloads}</p>
-    {/if}
+    <ExportFolder folder={vc.folder} {disabled} downloads={OUTPUT_STATUS.downloads} />
   </div>
 
   <label class="label" for="video-profile">Video profile</label>
@@ -107,14 +86,6 @@
   .field {
     min-width: 0;
   }
-  .row {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-  }
-  .path {
-    flex: 1 1 140px;
-  }
   select.input {
     min-width: 200px;
   }
@@ -124,14 +95,5 @@
   .value {
     margin: 0;
     padding-top: 7px;
-  }
-  .link {
-    padding: 0;
-    border: 0;
-    background: none;
-    color: var(--link);
-    text-decoration: underline;
-    font: inherit;
-    cursor: pointer;
   }
 </style>

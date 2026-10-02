@@ -15,6 +15,7 @@ The repo is currently **specs-first**. Before implementing anything, read `docs/
 - Route codecs by **runtime capability detection** (`engine/media/capabilities.ts`), never by user-agent.
 - Stream decode → effect → encode → mux → sink. Never buffer all frames. Process batches sequentially.
 - Cancel and failure must delete partial outputs (every `OutputSink` implements `remove`).
+- Keep Mediabunny out of a worker's entry module: dynamic-`import()` the pipeline. WebKit re-instantiates an imported worker entry, so WASM encoders registered there silently vanish (spec 01).
 - UI colours come from theme tokens that follow `prefers-color-scheme`. No hardcoded colours in components.
 
 ## Parity gotchas (easy to get wrong)
