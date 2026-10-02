@@ -15,7 +15,15 @@ The CPU reference (`src/engine/effects/cpu/`) is **bit-exact** against the deskt
 
 Exactness depends on the desktop's library versions, recorded in `golden.json → generatedFrom.libraries`. The desktop's `requirements.txt` doesn't pin OpenCV, so a desktop build with OpenCV < 4.11 would rotate slightly differently.
 
-The **WebGL** implementations (Phase 2) are compared to the CPU reference with a tolerance (max abs diff ≤ 3, mean ≤ 1), because GPU texture sampling isn't bit-reproducible.
+The **WebGL** implementations (`src/engine/effects/gl/`) don't use hardware texture filtering. Each pass `texelFetch`es 8-bit texels and repeats the CPU reference's arithmetic:
+
+- Radial blur gets OpenCV's integer resize taps from a small `RG32I` texture computed on the CPU.
+- Rotate evaluates the same float32 inverse map.
+- Every pass quantises to uint8 exactly where numpy/OpenCV do.
+
+Measured (Chromium, WebKit, Firefox on macOS): byte-equal to the golden frames for blur, rotate and overlay. The full chain is within ±1 (float contraction in the rotate maths on some drivers), and VHS grain within ±1 on < 0.1 % of values (`log`/`cos` precision). The tests still assert the spec tolerance (max abs diff ≤ 3, mean ≤ 1), because GPU float behaviour varies by driver.
+
+VHS grain and Glitch slices come from `plan.ts`, shared by CPU and GL. Grain is a per-pixel lowbias32 hash + Box–Muller of `(x, y, channel, seed)`. Glitch slices are drawn on the CPU per frame and passed as a uniform table.
 
 ## Settings model (TS port of the dataclasses)
 
@@ -126,10 +134,10 @@ GL: compute the slice table on the CPU per frame (cheap) and pass it as a unifor
 
 ## Fades (post-effects)
 
-Applied by the render pipeline after the cascade:
+Applied by the render pipeline after the cascade (`engine/effects/fade.ts`):
 
-- **Video fade** (default on): linear fade from black over `fade` seconds at the start and to black at the end (moviepy `FadeIn`/`FadeOut`). `fade = min(0.5, actualDuration / 2)`.
-- **Audio fade** (default on): linear gain ramps over the same `fade` length, applied to the **music** track only.
+- **Video fade** (default on): linear fade from black over `fade` seconds at the start and to black at the end (moviepy `FadeIn`/`FadeOut`). `fade = min(0.5, actualDuration / 2)`. The gain is `min(t/fade, 1) × min((duration − t)/fade, 1)` (each factor is 1 outside its window). Applied as `astype(uint8)` of `frame × gain`, so it **truncates**. GL: the `FADE` pass.
+- **Audio fade** (default on): the same gain per sample (`t = n / sampleRate`), applied to the **music** track only.
 
 ## Golden fixtures
 

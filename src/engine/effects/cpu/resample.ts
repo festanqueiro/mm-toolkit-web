@@ -12,7 +12,11 @@ import { createImage, roundHalfEven, type Image8 } from "./image";
 
 const RESIZE_COEF_SCALE = 2048; // INTER_RESIZE_COEF_BITS = 11
 
-function linearTaps(dst: number, src: number): { index: Int32Array; weight: Int32Array } {
+/**
+ * OpenCV INTER_LINEAR taps for resizing `src` → `dst` pixels along one axis: per destination
+ * pixel, the left source index and its 11-bit weight (the right weight is 2048 − w0).
+ */
+export function linearTaps(dst: number, src: number): { index: Int32Array; weight: Int32Array } {
   const scale = src / dst;
   const index = new Int32Array(dst);
   const weight = new Int32Array(dst * 2);
@@ -87,15 +91,8 @@ export type BorderMode = "replicate" | "constant";
 
 const f32 = Math.fround;
 
-/**
- * `cv2.warpAffine(img, M, (w, h), flags=INTER_LINEAR, borderMode=...)` as implemented by
- * OpenCV ≥ 4.11 / 5.x (the desktop runs 5.0): M (source → destination) is inverted in
- * float64, then per pixel the source coordinate and the bilinear lerps are evaluated in
- * float32 and rounded half-to-even. Verified bit-exact against OpenCV 5.0 output.
- */
-export function cvWarpAffine(image: Image8, matrix: AffineMatrix, border: BorderMode, borderValue = 0): Image8 {
-  const { width, height, channels, data } = image;
-  const out = createImage(width, height, channels);
+/** warpAffine's inverse map (destination → source): inverted in float64, stored as float32. */
+export function invertAffineF32(matrix: AffineMatrix): AffineMatrix {
   const [, , m2, , , m5] = matrix;
   let [m0, m1, , m3, m4] = matrix;
   let det = m0 * m4 - m1 * m3;
@@ -108,7 +105,19 @@ export function cvWarpAffine(image: Image8, matrix: AffineMatrix, border: Border
   m4 = a22;
   const b1 = -m0 * m2 - m1 * m5;
   const b2 = -m3 * m2 - m4 * m5;
-  const [i0, i1, i2, i3, i4, i5] = [m0, m1, b1, m3, m4, b2].map(f32) as AffineMatrix;
+  return [m0, m1, b1, m3, m4, b2].map(f32) as AffineMatrix;
+}
+
+/**
+ * `cv2.warpAffine(img, M, (w, h), flags=INTER_LINEAR, borderMode=...)` as implemented by
+ * OpenCV ≥ 4.11 / 5.x (the desktop runs 5.0): M (source → destination) is inverted in
+ * float64, then per pixel the source coordinate and the bilinear lerps are evaluated in
+ * float32 and rounded half-to-even. Verified bit-exact against OpenCV 5.0 output.
+ */
+export function cvWarpAffine(image: Image8, matrix: AffineMatrix, border: BorderMode, borderValue = 0): Image8 {
+  const { width, height, channels, data } = image;
+  const out = createImage(width, height, channels);
+  const [i0, i1, i2, i3, i4, i5] = invertAffineF32(matrix);
   const sample = (px: number, py: number, c: number) => {
     if (border === "replicate") {
       const x = px < 0 ? 0 : px >= width ? width - 1 : px;

@@ -33,7 +33,8 @@ The repo is currently **specs-first**. Before implementing anything, read `docs/
 npm install && npx playwright install
 npm run dev                                   # dev server
 npm run lint && npm run check                 # ESLint + svelte-check (types)
-npm test                                      # Vitest (unit + golden parity)
+npm test                                      # Vitest in Node (unit + golden parity)
+npm run test:gl                               # WebGL parity in real browsers (Vitest browser mode)
 npx vitest run tests/pure.test.ts -t parseTimestamp   # single test
 npm run test:e2e                              # Playwright: chromium, webkit, firefox
 npx playwright test --project=chromium        # one engine
