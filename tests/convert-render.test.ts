@@ -74,5 +74,11 @@ describe("encode rate", () => {
     expect(encodeRate("aac", 11_025)).toBe(48_000);
     expect(encodeRate("mp3", 22_050)).toBe(22_050);
     expect(encodeRate("flac", 96_000)).toBe(96_000);
+    expect(encodeRate("flac", 44_100)).toBe(44_100);
+    // Rates the WASM FLAC encoder lacks: an exact multiple, else the next one up.
+    expect(encodeRate("flac", 11_025)).toBe(22_050);
+    expect(encodeRate("flac", 12_000)).toBe(24_000);
+    expect(encodeRate("flac", 37_800)).toBe(44_100);
+    expect(encodeRate("flac", 384_000)).toBe(192_000);
   });
 });

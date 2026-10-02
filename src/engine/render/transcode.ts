@@ -16,7 +16,6 @@ import {
   AudioSampleSource,
   BlobSource,
   BufferTarget,
-  canEncodeAudio,
   Conversion,
   ConversionCanceledError,
   FlacOutputFormat,
@@ -111,7 +110,20 @@ async function ensureEncoder(codec: AudioCodec): Promise<void> {
   registered.add(codec);
   if (codec === "mp3") (await import("@mediabunny/mp3-encoder")).registerMp3Encoder();
   else if (codec === "flac") (await import("@mediabunny/flac-encoder")).registerFlacEncoder();
-  else if (!(await canEncodeAudio(codec))) (await import("@mediabunny/aac-encoder")).registerAacEncoder();
+  else if (!(await nativeAacEncoder())) (await import("@mediabunny/aac-encoder")).registerAacEncoder();
+}
+
+/**
+ * Asks the browser directly: Mediabunny's `canEncodeAudio` memoizes per config, so asking it
+ * before registering a fallback would cache "unsupported" for that config.
+ */
+async function nativeAacEncoder(): Promise<boolean> {
+  if (typeof AudioEncoder === "undefined") return false;
+  try {
+    return (await AudioEncoder.isConfigSupported({ codec: "mp4a.40.2", sampleRate: 48_000, numberOfChannels: 2, bitrate: 256_000 })).supported === true;
+  } catch {
+    return false;
+  }
 }
 
 function outputFormat(format: Exclude<AudioFormat, "aiff"> | VideoFormat): OutputFormat {
@@ -141,11 +153,19 @@ function outputFormat(format: Exclude<AudioFormat, "aiff"> | VideoFormat): Outpu
 /**
  * The rate to encode at. Opus is defined at 48 kHz, and native encoders misbehave at unusual
  * rates (WebKit's Opus fails at 11.025 kHz; its AAC writes an explicit-frequency config that
- * ADTS can't carry), so Opus is always 48 kHz and AAC keeps only 44.1/48 kHz sources' rates.
+ * ADTS can't carry), so Opus is always 48 kHz, AAC keeps only 44.1/48 kHz sources' rates, and
+ * FLAC keeps every rate the WASM encoder accepts.
  */
 const OPUS_RATE = 48_000;
+/** `@mediabunny/flac-encoder` only accepts these; any other rate would fall through to a native encoder (broken on WebKitGTK). */
+const FLAC_RATES = [8_000, 16_000, 22_050, 24_000, 32_000, 44_100, 48_000, 88_200, 96_000, 176_400, 192_000];
 export function encodeRate(codec: AudioCodec, sourceRate: number): number {
   if (codec === "opus") return OPUS_RATE;
+  if (codec === "flac" && !FLAC_RATES.includes(sourceRate)) {
+    // Prefer an exact multiple (11.025 → 22.05 kHz), else the next rate up, else the highest.
+    const higher = FLAC_RATES.filter((r) => r > sourceRate);
+    return higher.find((r) => r % sourceRate === 0) ?? higher[0] ?? FLAC_RATES.at(-1)!;
+  }
   if (codec === "aac" && sourceRate !== 44_100 && sourceRate !== 48_000) return 48_000;
   return sourceRate;
 }

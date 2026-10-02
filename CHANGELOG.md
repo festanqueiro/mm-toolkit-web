@@ -18,7 +18,7 @@ policy in `CLAUDE.md` (patch by default, minor/major only when requested).
 
 ### Changed
 - The Cutter and the Converter share one transcoding engine and one job Worker.
-- Opus is always encoded at 48 kHz, and AAC at 48 kHz unless the source is 44.1/48 kHz: WebKit's encoders fail or write broken ADTS at unusual rates.
+- Opus is always encoded at 48 kHz, and AAC at 48 kHz unless the source is 44.1/48 kHz: WebKit's encoders fail or write broken ADTS at unusual rates. FLAC at a rate the WASM encoder lacks (e.g. 11.025 kHz) is resampled to a supported one instead of falling through to WebKitGTK's broken native encoder.
 
 ## [0.1.10] - 2026-10-02
 

@@ -73,7 +73,7 @@ The job runs in `workers/job.worker.ts` (`engine/render/convert.ts`), each file 
 
 - **AVI output** is listed but disabled ("not available"): it needs MPEG-4 Part 2 + an AVI muxer (ffmpeg.wasm). Pending **ADR-004**.
 - **OGG** is **Opus 192 kbps** (Vorbis q6 ≈ 192 kbps) until **ADR-003**.
-- **Sample rates**: Opus is always encoded at 48 kHz; AAC keeps 44.1/48 kHz sources and resamples others to 48 kHz. Native encoders misbehave at unusual rates (WebKit's Opus fails at 11.025 kHz; its AAC writes a config ADTS can't carry). Streamed with `StreamResampler`.
+- **Sample rates**: Opus is always encoded at 48 kHz; AAC keeps 44.1/48 kHz sources and resamples others to 48 kHz; FLAC keeps every rate the WASM encoder accepts (8–192 kHz standard rates) and otherwise resamples to an exact multiple (11.025 → 22.05 kHz) or the next rate up. Otherwise Mediabunny falls through to a native encoder, and WebKitGTK's writes broken FLAC. Native encoders misbehave at unusual rates (WebKit's Opus fails at 11.025 kHz; its AAC writes a config ADTS can't carry). Streamed with `StreamResampler`.
 - The web **adds** picked files to the list (deduped) instead of replacing it, so a batch can be built from several folders.
 - No WASM size ceiling is needed: the WASM encoders here are audio-only and stream, so the ffmpeg.wasm limit below doesn't apply until ffmpeg.wasm ships.
 
