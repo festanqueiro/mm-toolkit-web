@@ -47,6 +47,13 @@ The web app is always the deployed version, so **drop the GitHub check**. With t
 
 Version semantics: `/^v?(\d+)\.(\d+)\.(\d+)$/` after trimming. Anything else isn't a version, so it's never "newer".
 
+## Home (web-only, requested 2026-10-02)
+
+- The landing page (`#/`, no hash, or any unknown route) is **Home**; it isn't a tab. The brand logo links to it (`aria-current="page"` while there); the tool tabs are unchanged. Document title: `MM Toolkit`.
+- Hero: `Audio & video tools, right in your browser` + one sentence that ends with the privacy promise (`your files are never uploaded.`).
+- One card per tool, in tab order (Video Creator, Media Cutter, Media Converter, Stem Splitter): icon, a one-line summary, four concrete capabilities, `Open {tool} →`. The whole card is the link. Copy lives in `ui/tools.ts` and must only claim what the tool does today.
+- Footer line: works offline once loaded; links to History and Settings.
+
 ## PWA (Phase 4)
 
 - Manifest: name "MM Toolkit", icons from `assets/mm-toolkit-icon.png` (generate 192/512 + maskable). Theme colour from tokens.
