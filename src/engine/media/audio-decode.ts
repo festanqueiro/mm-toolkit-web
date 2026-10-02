@@ -54,34 +54,27 @@ function slice(pcm: PcmAudio, range?: DecodeRange): PcmAudio {
 }
 
 /**
- * Whether `track` really decodes in this engine: `canDecode()`, then the first sample must
- * arrive within `timeoutMs`. Some engines report support and then fail or never produce a
- * sample (WebKitGTK's GStreamer Vorbis decoder hangs), which `canDecode()` can't reveal.
+ * Whether `track` really decodes in this engine: `canDecode()`, then a short range must
+ * decode within `timeoutMs`. Some engines report support and then never produce a sample
+ * (WebKitGTK's GStreamer Vorbis decoder hangs), which `canDecode()` can't reveal. Decoding a
+ * bounded range to its end flushes the decoder, so decoders that only emit on flush (WebKitGTK's
+ * AAC) still pass.
  */
-export let lastProbe = "";
 export async function decodesHere(track: InputAudioTrack, timeoutMs = 4000): Promise<boolean> {
-  const t0 = performance.now();
   if (!(await track.canDecode())) return false;
-  const samples = new AudioSampleSink(track).samples();
+  const start = await track.getFirstTimestamp().catch(() => 0);
+  const samples = new AudioSampleSink(track).samples(start, start + 0.25);
   let timer: ReturnType<typeof setTimeout> | undefined;
+  const decodeAll = (async () => {
+    let any = false;
+    for await (const sample of samples) {
+      any = true;
+      sample.close();
+    }
+    return any;
+  })().catch(() => false);
   try {
-    return await Promise.race([
-      samples.next().then(
-        (result) => {
-          lastProbe = `done=${result.done} after ${Math.round(performance.now() - t0)}ms`;
-          result.value?.close();
-          return !result.done;
-        },
-        (e) => {
-          lastProbe = `error ${e} after ${Math.round(performance.now() - t0)}ms`;
-          return false;
-        },
-      ),
-      new Promise<boolean>((resolve) => (timer = setTimeout(() => {
-        lastProbe = `timeout after ${Math.round(performance.now() - t0)}ms`;
-        resolve(false);
-      }, timeoutMs))),
-    ]);
+    return await Promise.race([decodeAll, new Promise<boolean>((resolve) => (timer = setTimeout(() => resolve(false), timeoutMs)))]);
   } finally {
     clearTimeout(timer);
     // Don't await: a hung decoder may never settle.
