@@ -41,7 +41,7 @@
 {#if results.length}
   <RailBlock title="Results">
     <p class="saved" data-testid="results-saved">
-      {savedTo}{#if historyId} · <button type="button" class="link" onclick={() => openHistory(historyId)}>Open in History</button>{/if}
+      {savedTo}{#if historyId}<span class="sep" aria-hidden="true">·</span><button type="button" class="link" onclick={() => openHistory(historyId)}>Open in History</button>{/if}
     </p>
     <ul class="results" aria-label="Results">
       {#each files as file (file.name)}
@@ -68,6 +68,9 @@
     margin: 0 0 10px;
     color: var(--text-muted);
     font-size: 0.9rem;
+  }
+  .sep {
+    margin: 0 6px;
   }
   .results {
     list-style: none;

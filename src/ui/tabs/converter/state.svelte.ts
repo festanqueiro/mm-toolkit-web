@@ -26,7 +26,9 @@ import { addHistory, historyId, localTimestamp } from "../../../storage/history"
 import type { ToolRequest, Undecodable } from "../../../workers/render-protocol";
 import { decodeAtNativeRate } from "../../../workers/media-client";
 import { jobRecorded } from "../../history.svelte";
+import type { AvailableOutput } from "../../../io/history-outputs";
 import { historyOutputs, notifyFinished, runJob } from "../../job-runner";
+import { jobResults, savedToLabel } from "../../job-results";
 import { OutputFolder } from "../../output-folder.svelte";
 import { app } from "../../state.svelte";
 
@@ -46,6 +48,9 @@ class ConverterState {
   pendingNames = $state<string[]>([]);
   /** The last finished job's History id (the progress label links to it). */
   lastJobId = $state<string | null>(null);
+  /** The last job's files, playable in the rail (cleared by Clear and when a job starts). */
+  results = $state.raw<AvailableOutput[]>([]);
+  savedTo = $state("");
   warnings = $state<string[]>([]);
   failure = $state<{ message: string; details: string } | null>(null);
 
@@ -103,6 +108,7 @@ class ConverterState {
     this.cancelling = false;
     this.failure = null;
     this.warnings = [];
+    this.results = [];
     this.progress = { percent: 0, status: CONVERT_PROGRESS.preparing };
     const s = app.settings;
     const jobId = historyId();
@@ -141,7 +147,9 @@ class ConverterState {
       }
       // Staged copies stay until the next job or app load: deleting them now would cancel the download.
       if (!handle && outputs.length) await deliverStaged(outputs, { zip: s["web/zip_batches"], tool: "Media Converter" });
-      await this.record(jobId, sources, format, bitrate, outputs, !!handle);
+      const record = await this.record(jobId, sources, format, bitrate, outputs, !!handle);
+      this.results = await jobResults(outputs, record).catch(() => []);
+      this.savedTo = savedToLabel(!!handle, this.folder.ref?.name);
       this.progress = { percent: 100, status: finishedConversions(outputs.length) };
       notifyFinished("Conversion", outputs.length);
     } catch (error) {
@@ -178,26 +186,29 @@ class ConverterState {
     this.worker?.postMessage({ type: "cancel" } satisfies ToolRequest);
   }
 
-  private async record(id: string, sources: File[], format: string, bitrate: string, outputs: OutputRef[], directory: boolean) {
+  private async record(id: string, sources: File[], format: string, bitrate: string, outputs: OutputRef[], directory: boolean): Promise<Record<string, unknown>> {
     const ref = (f: File) => ({ name: f.name, size: f.size, lastModified: f.lastModified });
+    const record = {
+      id,
+      tool: "converter" as const,
+      created: localTimestamp(),
+      source: ref(sources[0]!),
+      sources: sources.map(ref),
+      output: directory ? ($state.snapshot(this.folder.ref) as FileRef | null) : { name: "Downloads" },
+      format,
+      bitrate,
+      outputs: historyOutputs(outputs),
+    };
     try {
-      await addHistory({
-        id,
-        tool: "converter",
-        created: localTimestamp(),
-        source: ref(sources[0]!),
-        sources: sources.map(ref),
-        output: directory ? ($state.snapshot(this.folder.ref) as FileRef | null) : { name: "Downloads" },
-        format,
-        bitrate,
-        outputs: historyOutputs(outputs),
-      });
+      await addHistory(record);
       this.lastJobId = id;
       jobRecorded(id);
     } catch {
       // History is best effort (storage may be unavailable).
     }
+    return record;
   }
+
 
   /** Load Job (spec 07): format, bitrate and export folder; the files are named for re-selection. */
   loadFromHistory(record: Record<string, unknown>): void {
@@ -217,6 +228,7 @@ class ConverterState {
     if (this.running) return;
     this.progress = null;
     this.warnings = [];
+    this.results = [];
     this.files = [];
     this.selected = [];
     this.pendingNames = [];
