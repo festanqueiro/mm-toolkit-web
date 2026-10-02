@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Snippet } from "svelte";
+  import { tick, type Snippet } from "svelte";
   import type { IconName } from "../icons";
   import PageHeader from "./PageHeader.svelte";
 
@@ -19,28 +19,39 @@
   }: { title: string; subtitle: string; icon: IconName; setup: Snippet; rail: Snippet; action: Snippet; after: Snippet } = $props();
 
   let wide = $state(matchMedia("(min-width: 1000px)").matches);
+  let page = $state<HTMLElement>();
+  const actionHost = () => page?.querySelector<HTMLElement>("[data-action-host]") ?? null;
   $effect(() => {
     const query = matchMedia("(min-width: 1000px)");
-    const update = () => (wide = query.matches);
+    const update = async () => {
+      // The action is re-created in its new place; keep keyboard focus on the same control.
+      const host = actionHost();
+      const controls = host ? [...host.querySelectorAll<HTMLElement>("button, a, input, select")] : [];
+      const focused = controls.indexOf(document.activeElement as HTMLElement);
+      wide = query.matches;
+      if (focused < 0) return;
+      await tick();
+      actionHost()?.querySelectorAll<HTMLElement>("button, a, input, select")[focused]?.focus();
+    };
     query.addEventListener("change", update);
     return () => query.removeEventListener("change", update);
   });
 </script>
 
-<div class="tool-page">
+<div class="tool-page" bind:this={page}>
   <PageHeader {title} {subtitle} {icon} />
   <div class="tool" class:wide>
     <div class="setup">{@render setup()}</div>
     <aside class="rail" aria-label="Output" data-testid="rail">
       {@render rail()}
       {#if wide}
-        <div class="rail-action-block">{@render action()}</div>
+        <div class="rail-action-block" data-action-host>{@render action()}</div>
       {/if}
       {@render after()}
     </aside>
   </div>
   {#if !wide}
-    <div class="bar" data-testid="action-bar">{@render action()}</div>
+    <div class="bar" data-testid="action-bar" data-action-host>{@render action()}</div>
   {/if}
 </div>
 

@@ -4,6 +4,7 @@
   /** A file input row that also accepts drag & drop: icon/thumbnail · title + body · actions. */
   let {
     title,
+    titleHidden = false,
     filled = false,
     disabled = false,
     ondropped,
@@ -12,6 +13,8 @@
     actions,
   }: {
     title: string;
+    /** The enclosing section's heading already says it: keep the title for assistive tech only. */
+    titleHidden?: boolean;
     filled?: boolean;
     disabled?: boolean;
     ondropped: (transfer: DataTransfer) => void;
@@ -38,13 +41,21 @@
 <div class="zone" class:filled class:dragging role="group" aria-labelledby={id} ondragover={dragOver} ondragleave={() => (dragging = false)} ondrop={drop}>
   <span class="zone-icon">{@render icon()}</span>
   <div class="zone-body">
-    <span class="zone-title" {id}>{title}</span>
+    <span class="zone-title" class:visually-hidden={titleHidden} {id}>{title}</span>
     {@render children()}
   </div>
   <div class="zone-actions">{@render actions()}</div>
 </div>
 
 <style>
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
   .zone {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);

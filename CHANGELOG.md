@@ -6,6 +6,14 @@ policy in `CLAUDE.md` (patch by default, minor/major only when requested).
 
 ## [Unreleased]
 
+## [0.1.22] - 2026-10-03
+
+### Fixed
+- Results list every output: one that can't be opened here (folder moved, permission lost) says "Can't be opened here. See History." instead of silently missing.
+- Keyboard focus stays on the same button when the window crosses the narrow-screen breakpoint.
+- The Video Creator no longer repeats the "Audio" and "Image or video" headings inside their drop zones.
+- The Stem Splitter shows Results after its downloads and History, like the other tools.
+
 ## [0.1.21] - 2026-10-03
 
 ### Fixed

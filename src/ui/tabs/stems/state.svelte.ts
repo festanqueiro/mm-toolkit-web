@@ -133,9 +133,6 @@ class StemSplitterState {
         bitrate: job.bitrate,
         outputs: historyOutputs(outputs),
       };
-      // Resolve before delivering: the in-memory fallback's files are only in `outputs`.
-      this.results = await jobResults(outputs, record).catch(() => []);
-      this.savedTo = savedToLabel(!!handle, this.folder.ref?.name);
       if (!handle && outputs.length) await deliverStaged(outputs, { zip: s["web/zip_batches"], tool: "Stem Splitter" });
       try {
         await addHistory(record);
@@ -144,6 +141,9 @@ class StemSplitterState {
       } catch {
         // History is best effort.
       }
+      // Like the other tools: results after delivery and History, so a failed delivery shows only the error.
+      this.results = await jobResults(outputs, record).catch(() => []);
+      this.savedTo = savedToLabel(!!handle, this.folder.ref?.name);
       this.progress = { percent: 100, status: finishedStems(outputs.length) };
       notifyFinished("Stems", outputs.length);
     } catch (error) {

@@ -128,7 +128,7 @@
 <ToolLayout title="Video Creator" {subtitle} icon="music_video">
   {#snippet setup()}
     <SetupSection title="Audio" status={musicOk ? `✓ ${trackWord}` : ""} tone="ok">
-      <DropZone title="Audio" filled={musicOk} disabled={vc.running} ondropped={dropAudio}>
+      <DropZone title="Audio" titleHidden filled={musicOk} disabled={vc.running} ondropped={dropAudio}>
         {#snippet icon()}<span class="tile" aria-hidden="true"><Icon name={vc.audio?.folder ? "folder_open" : "audiotrack"} size={26} /></span>{/snippet}
         {#if vc.audio}
           <span class="zone-file" title={vc.audio.label}>{vc.audio.label}</span>
@@ -144,7 +144,7 @@
     </SetupSection>
 
     <SetupSection title="Image or video">
-      <DropZone title="Image or video" filled={visualOk} disabled={vc.running} ondropped={dropVisual}>
+      <DropZone title="Image or video" titleHidden filled={visualOk} disabled={vc.running} ondropped={dropVisual}>
         {#snippet icon()}
           {#if vc.visual?.ok}
             <span class="thumb"><img src={vc.visual.thumbnail} alt="Preview of {vc.visualFile?.name}" /></span>
