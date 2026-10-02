@@ -51,7 +51,7 @@ Version semantics: `/^v?(\d+)\.(\d+)\.(\d+)$/` after trimming. Anything else isn
 
 Design: [tool layout redesign](../superpowers/specs/2026-10-02-tool-layout-redesign-design.md). Applies to the Video Creator, Media Cutter, Media Converter and Stem Splitter.
 
-- Tool pages are up to **1440 px** wide (other pages 1240 px). The page header spans the width; below it, a **setup** column and an **output rail** (`clamp(300px, 25%, 380px)`, gap 20 px).
+- Tool pages are up to **1440 px** wide (other pages 1240 px). The page header spans the width; below it, a **setup** column and an **output rail** (`clamp(340px, 28%, 420px)`, gap 20 px; never scrolls sideways).
 - **Setup**: always-open sections (`h2` + an optional quiet status). No accordions, no step guidance.
 - **Output rail** (`aside` "Output"), sticky below the site header and scrolling internally when taller than the screen: **Preview** (Video Creator) → **Export** (the tool's output settings) → the **action** (requirements, primary button, progress + Cancel, warnings, Clear; pinned to the rail's bottom) → the inline **error** card (`role="alert"`, Details, Dismiss) → **Results**.
 - **Results**: after a job, `Saved to {folder}` or `Downloaded` plus `Open in History`, then one row per output with its size, a player and **Download**. Replaced by the next job's; emptied by Clear.

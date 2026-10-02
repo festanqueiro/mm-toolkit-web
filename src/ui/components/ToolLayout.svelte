@@ -63,13 +63,15 @@
     min-width: 0;
   }
   .tool.wide {
-    grid-template-columns: minmax(0, 1fr) clamp(300px, 25%, 380px);
+    grid-template-columns: minmax(0, 1fr) clamp(340px, 28%, 420px);
   }
   .tool.wide .rail {
     position: sticky;
     top: 76px;
     max-height: calc(100vh - 96px);
-    overflow: auto;
+    overflow: hidden auto;
+    /* A visible (non-overlay) scrollbar mustn't squeeze the content into a sideways scroll. */
+    scrollbar-gutter: stable;
     padding-bottom: 4px;
   }
   .rail-action-block {

@@ -76,6 +76,16 @@ test("the action stays visible when the rail is taller than the screen", async (
   expect(await rail.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
 });
 
+test("the rail is roomy and never scrolls sideways", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/#/video-creator");
+  const rail = page.getByRole("complementary", { name: "Output" });
+  expect((await rail.boundingBox())!.width).toBeGreaterThanOrEqual(340);
+  const style = await rail.evaluate((el) => [getComputedStyle(el).overflowX, getComputedStyle(el).scrollbarGutter]);
+  expect(["hidden", "clip"]).toContain(style[0]);
+  expect(style[1]).toBe("stable");
+});
+
 test("narrow screens: one column, the action in a bottom bar, no overflow", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 800 });
   await page.goto("/#/converter");
