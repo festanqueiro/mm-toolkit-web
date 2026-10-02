@@ -149,15 +149,18 @@ function outputFormat(format: Exclude<ClipFormat, "aiff">): OutputFormat {
   }
 }
 
-/** Register a Mediabunny WASM encoder once, only when the browser has no native one. */
+/**
+ * Register a Mediabunny WASM encoder once. MP3 (LAME, as desktop FFmpeg) and FLAC always use
+ * WASM: no native encoder is trustworthy for them (WebKitGTK's GStreamer ones claim support
+ * and write broken files). AAC only falls back to WASM when there's no native encoder.
+ */
 const registered = new Set<string>();
 async function ensureEncoder(codec: AudioCodec): Promise<void> {
   if (registered.has(codec) || !["aac", "mp3", "flac"].includes(codec)) return;
   registered.add(codec);
-  if (await canEncodeAudio(codec)) return;
-  if (codec === "aac") (await import("@mediabunny/aac-encoder")).registerAacEncoder();
-  else if (codec === "mp3") (await import("@mediabunny/mp3-encoder")).registerMp3Encoder();
-  else (await import("@mediabunny/flac-encoder")).registerFlacEncoder();
+  if (codec === "mp3") (await import("@mediabunny/mp3-encoder")).registerMp3Encoder();
+  else if (codec === "flac") (await import("@mediabunny/flac-encoder")).registerFlacEncoder();
+  else if (!(await canEncodeAudio(codec))) (await import("@mediabunny/aac-encoder")).registerAacEncoder();
 }
 
 type TrackOptions = { video: ConversionVideoOptions; audio: ConversionAudioOptions };
