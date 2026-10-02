@@ -11,7 +11,8 @@ export default defineConfig({
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
     { name: "webkit", use: { ...devices["Desktop Safari"] } },
-    { name: "firefox", use: { ...devices["Desktop Firefox"] } },
+    // CI's Firefox sometimes blocklists Mesa's software GL at startup; skip that check.
+    { name: "firefox", use: { ...devices["Desktop Firefox"], launchOptions: { firefoxUserPrefs: { "webgl.force-enabled": true } } } },
   ],
   webServer: {
     command: "npm run build && npm run preview -- --port 4173 --strictPort",
