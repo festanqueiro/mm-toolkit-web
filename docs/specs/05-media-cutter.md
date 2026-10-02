@@ -67,7 +67,7 @@ Two columns (≈ 5 : 4).
 
 ### Web implementation notes
 
-The job runs in `workers/cut.worker.ts` (`engine/render/clips.ts`). Every clip is re-encoded like the desktop; Mediabunny's `Conversion` streams decode → trim → encode → mux with `tracks: "primary"` (first video + first audio stream).
+The job runs in `workers/job.worker.ts` (`engine/render/clips.ts` over the shared `engine/render/transcode.ts`). Every clip is re-encoded like the desktop; Mediabunny's `Conversion` streams decode → trim → encode → mux with `tracks: "primary"` (first video + first audio stream).
 
 - **WAV**: `pcm-s24` through Mediabunny's WAV muxer.
 - **AIFF**: Mediabunny has no AIFF demuxer, so AIFF is read, sliced and written (24-bit BE) in TS (`engine/media/aiff.ts`).
@@ -81,6 +81,7 @@ The job runs in `workers/cut.worker.ts` (`engine/render/clips.ts`). Every clip i
 **Documented deviations**
 
 - **OGG** clips are **Opus 256 kbps in Ogg**, not Vorbis q8: no Vorbis encoder exists for the web without ffmpeg.wasm. Interim until ADR-003 decides.
+- Opus is encoded at 48 kHz, and AAC at 48 kHz unless the source is 44.1/48 kHz (see [06](06-media-converter.md#documented-deviations)).
 - A clip whose start is at or past the end of the source fails with `Clip {n} starts after the end of {source}.` (FFmpeg would write an empty file). A clip running past the end is clamped, like FFmpeg `-t`.
 - Odd video dimensions are rounded down to even for 4:2:0 (libx264 would refuse them).
 

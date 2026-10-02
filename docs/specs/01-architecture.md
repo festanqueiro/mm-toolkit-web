@@ -103,7 +103,9 @@ Each encode or decode is routed through a single decision function. For example,
 | Video decode | WebCodecs via Mediabunny | ffmpeg.wasm transcode to an intermediate (ProRes, AVI, …) |
 | Image decode | `createImageBitmap` | TIFF via `utif` (only Safari decodes TIFF natively) |
 
-Mediabunny's WASM encoders are registered with `canEncodeAudio` checks, lazily, inside the job Worker. **Keep Mediabunny out of a worker's entry module**: load the pipeline with a dynamic `import()` (see `cut.worker.ts`). The encoder chunks import Mediabunny from wherever the bundler put it, and WebKit evaluates an imported worker entry as a second module instance, so encoders registered there are invisible to the job.
+Mediabunny's WASM encoders are registered with `canEncodeAudio` checks, lazily, inside the job Worker. **Keep Mediabunny out of a worker's entry module**: load the pipeline with a dynamic `import()` (see `job.worker.ts`). The encoder chunks import Mediabunny from wherever the bundler put it, and WebKit evaluates an imported worker entry as a second module instance, so encoders registered there are invisible to the job.
+
+Ask the browser directly (`AudioEncoder.isConfigSupported`) when deciding whether to register a fallback: Mediabunny's `canEncodeAudio` **memoizes per config**, so asking it before registering caches "unsupported" for that config even after the fallback exists.
 
 ## Memory and streaming rules
 
