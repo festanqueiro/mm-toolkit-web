@@ -6,6 +6,11 @@ policy in `CLAUDE.md` (patch by default, minor/major only when requested).
 
 ## [Unreleased]
 
+## [0.1.18] - 2026-10-03
+
+### Changed
+- New tool layout, starting with the **Media Converter**: setup on the left, and a sticky output panel on the right with export settings, the Convert button and progress, errors inline, and the finished files with a player and Download each. On phones the panel stacks below and the button stays in a bottom bar.
+
 ## [0.1.17] - 2026-10-02
 
 ### Changed

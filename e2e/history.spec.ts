@@ -110,7 +110,7 @@ test("Load Job restores the Converter's format and the Video Creator's per-track
   await page.goto("/#/converter");
   await pick(page, "Choose Audio or Video Files…", golden("audio/short-10s-mono.wav"));
   await page.getByLabel("Convert to").selectOption("flac");
-  if (browserName === "chromium") await page.getByRole("region", { name: "Output" }).getByRole("button", { name: "Choose…" }).click();
+  if (browserName === "chromium") await page.getByRole("region", { name: "Export" }).getByRole("button", { name: "Choose…" }).click();
   let download = browserName === "chromium" ? null : page.waitForEvent("download");
   await page.getByRole("button", { name: "Convert Files" }).click();
   await download;

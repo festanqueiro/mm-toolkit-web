@@ -21,7 +21,7 @@ async function add(page: Page, ...paths: string[]) {
 
 async function chooseFolder(page: Page, browserName: string) {
   if (browserName !== "chromium") return;
-  await page.getByRole("region", { name: "Output" }).getByRole("button", { name: "Choose…" }).click();
+  await page.getByRole("region", { name: "Export" }).getByRole("button", { name: "Choose…" }).click();
   await expect(page.getByTestId("output-status")).toHaveText("✓ Export folder is writable.");
 }
 

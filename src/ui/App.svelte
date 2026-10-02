@@ -65,7 +65,7 @@
     </div>
   </header>
 
-  <main class="page" id="main" tabindex="-1">
+  <main class="page" class:tool-route={["video-creator", "cutter", "converter", "stems"].includes(current.path)} id="main" tabindex="-1">
     {#if current.path === ""}
       <Home />
     {:else if current.path === "about"}
@@ -248,6 +248,9 @@
     background: var(--surface);
     box-shadow: var(--shadow-md);
     font-weight: 600;
+  }
+  .page.tool-route {
+    max-width: 1440px;
   }
   .site-footer {
     display: flex;

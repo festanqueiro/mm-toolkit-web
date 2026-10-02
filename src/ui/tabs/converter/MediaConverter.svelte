@@ -14,10 +14,12 @@
   import Icon from "../../Icon.svelte";
   import DropZone from "../../components/DropZone.svelte";
   import ExportFolder from "../../components/ExportFolder.svelte";
-  import JobFooter from "../../components/JobFooter.svelte";
-  import Modal from "../../components/Modal.svelte";
-  import PageHeader from "../../components/PageHeader.svelte";
-  import Section from "../../components/Section.svelte";
+  import RailAction from "../../components/RailAction.svelte";
+  import RailBlock from "../../components/RailBlock.svelte";
+  import RailError from "../../components/RailError.svelte";
+  import RailResults from "../../components/RailResults.svelte";
+  import SetupSection from "../../components/SetupSection.svelte";
+  import ToolLayout from "../../components/ToolLayout.svelte";
   import { routes } from "../../routes";
   import { openHistory } from "../../history.svelte";
   import { app } from "../../state.svelte";
@@ -72,11 +74,9 @@
   $effect(() => closePreview);
 </script>
 
-<PageHeader title="Media Converter" {subtitle} icon="swap_horiz" />
-
-<div class="columns">
-  <div class="column">
-    <Section title="Input">
+<ToolLayout title="Media Converter" {subtitle} icon="swap_horiz">
+  {#snippet setup()}
+    <SetupSection title="Files">
       <DropZone title="Audio or video files" filled={batchOk} disabled={converter.running} ondropped={drop}>
         {#snippet icon()}<span class="tile" aria-hidden="true"><Icon name="swap_horiz" size={26} /></span>{/snippet}
         {#if converter.files.length}
@@ -131,98 +131,88 @@
           {inputStatus(batch)}
         </p>
       {/if}
-    </Section>
-  </div>
+    </SetupSection>
+  {/snippet}
 
-  <div class="column">
-    <Section title="Output">
-      <div class="form">
-        <span class="label">Detected media</span>
-        <p class="value" data-testid="detected">{detectedLabel(batch)}</p>
-
-        <label class="label" for="convert-to">Convert to</label>
-        <div class="field">
-          <select id="convert-to" class="input" disabled={!batchOk || converter.running} bind:value={converter.format}>
-            {#each formats as format (format)}
-              <option value={format} disabled={!!UNAVAILABLE_FORMATS[format]} title={UNAVAILABLE_FORMATS[format] ?? ""}>
-                {format.toUpperCase()}{UNAVAILABLE_FORMATS[format] ? " (not available)" : ""}
-              </option>
-            {/each}
-          </select>
-          {#if kind === "video" && formats.some((f) => UNAVAILABLE_FORMATS[f])}
-            <p class="status hint">{UNAVAILABLE_FORMATS.avi}</p>
-          {/if}
-          {#if converter.format === "ogg"}
-            <p class="status hint">OGG files use the Opus codec.</p>
-          {/if}
+  {#snippet rail()}
+    <RailBlock title="Export">
+      <div class="stack">
+        <div class="field-row">
+          <span class="label">Detected media</span>
+          <p class="value" data-testid="detected">{detectedLabel(batch)}</p>
         </div>
-
+        <label class="label" for="convert-to">Convert to</label>
+        <select id="convert-to" class="input" disabled={!batchOk || converter.running} bind:value={converter.format}>
+          {#each formats as format (format)}
+            <option value={format} disabled={!!UNAVAILABLE_FORMATS[format]} title={UNAVAILABLE_FORMATS[format] ?? ""}>
+              {format.toUpperCase()}{UNAVAILABLE_FORMATS[format] ? " (not available)" : ""}
+            </option>
+          {/each}
+        </select>
+        {#if kind === "video" && formats.some((f) => UNAVAILABLE_FORMATS[f])}
+          <p class="status hint">{UNAVAILABLE_FORMATS.avi}</p>
+        {/if}
+        {#if converter.format === "ogg"}
+          <p class="status hint">OGG files use the Opus codec.</p>
+        {/if}
         {#if kind === "audio" && converter.format === "mp3"}
           <label class="label" for="mp3-bitrate">MP3 bitrate</label>
-          <div class="field">
-            <select id="mp3-bitrate" class="input" disabled={converter.running} bind:value={converter.bitrate}>
-              {#each MP3_BITRATES as bitrate (bitrate)}
-                <option value={bitrate}>{parseInt(bitrate, 10)} kbps</option>
-              {/each}
-            </select>
-          </div>
+          <select id="mp3-bitrate" class="input" disabled={converter.running} bind:value={converter.bitrate}>
+            {#each MP3_BITRATES as bitrate (bitrate)}
+              <option value={bitrate}>{parseInt(bitrate, 10)} kbps</option>
+            {/each}
+          </select>
         {/if}
-
         <span class="label" id="converter-export-label">Export folder</span>
-        <div class="field">
-          <ExportFolder folder={converter.folder} disabled={converter.running} downloads={CONVERTER_DOWNLOADS} labelId="converter-export-label" />
-        </div>
+        <ExportFolder folder={converter.folder} disabled={converter.running} downloads={CONVERTER_DOWNLOADS} labelId="converter-export-label" />
       </div>
-    </Section>
-  </div>
-</div>
-
-<JobFooter
-  progress={converter.progress}
-  running={converter.running}
-  cancelling={converter.cancelling}
-  warnings={converter.warnings}
-  requirement={req}
-  label="Convert Files"
-  onstatus={converter.lastJobId && !converter.running ? () => openHistory(converter.lastJobId) : null}
-  progressLabel="Conversion progress"
-  onclear={() => {
-    closePreview();
-    converter.clear();
-  }}
-  oncancel={() => converter.cancel()}
-  onstart={() => converter.convert()}
-/>
-
-<Modal title="Conversion failed" open={converter.failure !== null} onclose={() => (converter.failure = null)}>
-  <p>{converter.failure?.message}</p>
-  {#if converter.failure?.details}
-    <details>
-      <summary>Details</summary>
-      <pre>{converter.failure.details}</pre>
-    </details>
-  {/if}
-  {#snippet actions()}
-    <button type="button" class="btn primary" onclick={() => (converter.failure = null)}>OK</button>
+    </RailBlock>
   {/snippet}
-</Modal>
+
+  {#snippet action()}
+    <RailAction
+      progress={converter.progress}
+      running={converter.running}
+      cancelling={converter.cancelling}
+      warnings={converter.warnings}
+      requirement={req}
+      label="Convert Files"
+      progressLabel="Conversion progress"
+      onstatus={converter.lastJobId && !converter.running ? () => openHistory(converter.lastJobId) : null}
+      onclear={() => {
+        closePreview();
+        converter.clear();
+      }}
+      oncancel={() => converter.cancel()}
+      onstart={() => converter.convert()}
+    />
+  {/snippet}
+
+  {#snippet after()}
+    <RailError title="Conversion failed" failure={converter.failure} ondismiss={() => (converter.failure = null)} />
+    <RailResults results={converter.results} savedTo={converter.savedTo} historyId={converter.lastJobId} />
+  {/snippet}
+</ToolLayout>
 
 <style>
-  .columns {
+  .stack {
     display: grid;
-    gap: 16px;
-    align-items: start;
+    gap: 8px;
   }
-  @media (min-width: 900px) {
-    .columns {
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    }
+  .stack .label {
+    font-weight: 600;
+    margin-top: 4px;
   }
-  .column {
+  .field-row {
     display: flex;
-    flex-direction: column;
-    gap: 12px;
-    min-width: 0;
+    gap: 8px;
+    align-items: baseline;
+  }
+  .value {
+    margin: 0;
+  }
+  .stack select.input {
+    width: 100%;
   }
   .files {
     list-style: none;
@@ -297,39 +287,11 @@
   .preview audio {
     width: 100%;
   }
-  .form {
-    display: grid;
-    grid-template-columns: minmax(110px, 150px) 1fr;
-    gap: 12px 14px;
-    align-items: start;
-  }
-  @media (max-width: 560px) {
-    .form {
-      grid-template-columns: 1fr;
-      gap: 6px;
-    }
-  }
   .label {
     padding-top: 7px;
     font-weight: 600;
   }
-  .field {
-    min-width: 0;
-  }
-  .value {
-    margin: 0;
-    padding-top: 7px;
-  }
-  select.input {
-    min-width: 200px;
-  }
   .hint {
     color: var(--text-muted);
-  }
-  pre {
-    max-height: 200px;
-    overflow: auto;
-    font-size: 0.8rem;
-    white-space: pre-wrap;
   }
 </style>

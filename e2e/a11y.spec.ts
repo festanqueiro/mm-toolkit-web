@@ -32,7 +32,7 @@ const pages: Record<string, (page: Page) => Promise<void>> = {
   },
   converter: async (page) => {
     await page.goto("/#/converter");
-    await pick(page, "Input", "Choose Audio or Video Files…", golden("audio/short-10s-mono.wav"));
+    await pick(page, "Files", "Choose Audio or Video Files…", golden("audio/short-10s-mono.wav"));
     await expect(page.getByTestId("input-status")).toHaveText("✓ 1 audio file ready.");
   },
   stems: async (page) => void (await page.goto("/#/stems")),
