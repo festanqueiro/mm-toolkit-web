@@ -5,6 +5,7 @@
 import {
   CONVERT_PROGRESS,
   DEFAULT_MP3_BITRATE,
+  MP3_BITRATES,
   detectBatch,
   finishedConversions,
   formatsFor,
@@ -13,13 +14,18 @@ import {
   type Mp3Bitrate,
   type OutputFormatName,
 } from "../../../engine/converter";
+import { reselectNames } from "../../../engine/history";
+import { AUDIO_OUTPUT_FORMATS, VIDEO_OUTPUT_FORMATS } from "../../../engine/media-kind";
 import { trackIdentity, type FileRef } from "../../../io/file-ref";
+import { isFolderRef } from "../../../io/history-outputs";
 import { deliverStaged } from "../../../io/deliver";
 import { probeSource } from "../../../io/media-probe";
-import { clearAllStaging, type OutputRef } from "../../../io/sink";
+import { prepareStaging } from "../../../io/retention";
+import type { OutputRef } from "../../../io/sink";
 import { addHistory, historyId, localTimestamp } from "../../../storage/history";
 import type { ToolRequest, Undecodable } from "../../../workers/render-protocol";
 import { decodeAtNativeRate } from "../../../workers/media-client";
+import { jobRecorded } from "../../history.svelte";
 import { historyOutputs, notifyFinished, runJob } from "../../job-runner";
 import { OutputFolder } from "../../output-folder.svelte";
 import { app } from "../../state.svelte";
@@ -36,6 +42,10 @@ class ConverterState {
   running = $state(false);
   cancelling = $state(false);
   progress = $state<{ percent: number; status: string } | null>(null);
+  /** Files named by Load Job that the user still has to pick (files aren't persisted). */
+  pendingNames = $state<string[]>([]);
+  /** The last finished job's History id (the progress label links to it). */
+  lastJobId = $state<string | null>(null);
   warnings = $state<string[]>([]);
   failure = $state<{ message: string; details: string } | null>(null);
 
@@ -51,6 +61,7 @@ class ConverterState {
     const known = new Set(this.files.map((f) => f.key));
     const added = files.filter((file) => !known.has(trackIdentity(file))).map((file) => ({ key: trackIdentity(file), file, ok: null as boolean | null }));
     this.files = [...this.files, ...added];
+    if (added.length) this.pendingNames = [];
     for (const entry of added) {
       void probeSource(entry.file).then((probe) => {
         const row = this.files.find((f) => f.key === entry.key);
@@ -71,8 +82,8 @@ class ConverterState {
   /** Keep the chosen format while it's still offered, else the first usable one. */
   private syncFormat(): void {
     const batch = this.batch;
-    // While new files are being probed, keep the current choice.
-    if ("error" in batch && batch.error === "checking") return;
+    // While new files are being probed (or none are picked yet, e.g. after Load Job), keep the choice.
+    if ("error" in batch && (batch.error === "checking" || batch.error === "empty")) return;
     this.format = keepFormat(this.format, formatsFor("kind" in batch ? batch.kind : null));
   }
 
@@ -96,7 +107,7 @@ class ConverterState {
     const s = app.settings;
     const jobId = historyId();
     const tier1 = !!app.capabilities?.directoryPicker;
-    if (!s["web/keep_output_copies"]) await clearAllStaging().catch(() => {});
+    await prepareStaging(s["web/keep_output_copies"]).catch(() => {});
     try {
       const handle = tier1 ? await this.folder.current() : null;
       if (tier1 && !handle) throw new Error("Choose a writable export folder.");
@@ -179,9 +190,24 @@ class ConverterState {
         bitrate,
         outputs: historyOutputs(outputs),
       });
+      this.lastJobId = id;
+      jobRecorded(id);
     } catch {
       // History is best effort (storage may be unavailable).
     }
+  }
+
+  /** Load Job (spec 07): format, bitrate and export folder; the files are named for re-selection. */
+  loadFromHistory(record: Record<string, unknown>): void {
+    if (this.running) return;
+    // The loaded job supersedes the one-time restore from Settings.
+    this.restored = true;
+    this.clear();
+    const all = [...AUDIO_OUTPUT_FORMATS, ...VIDEO_OUTPUT_FORMATS] as readonly string[];
+    if (typeof record.format === "string" && all.includes(record.format)) this.format = record.format as OutputFormatName;
+    if ((MP3_BITRATES as readonly unknown[]).includes(record.bitrate)) this.bitrate = record.bitrate as Mp3Bitrate;
+    if (isFolderRef(record.output)) void this.folder.set(record.output);
+    this.pendingNames = reselectNames(record);
   }
 
   /** Clear: files, format/bitrate back to defaults, export folder to the Settings default. */
@@ -191,6 +217,7 @@ class ConverterState {
     this.warnings = [];
     this.files = [];
     this.selected = [];
+    this.pendingNames = [];
     this.format = null;
     this.bitrate = DEFAULT_MP3_BITRATE;
     void this.folder.set(app.settings["general/default_output"]);

@@ -8,6 +8,7 @@
     MP3_BITRATES,
     UNAVAILABLE_FORMATS,
   } from "../../../engine/converter";
+  import { reselectHint } from "../../../engine/history";
   import { AUDIO_EXTENSIONS, mediaKind, VIDEO_EXTENSIONS } from "../../../engine/media-kind";
   import { filesFromDrop, pickFiles } from "../../../io/pick";
   import Icon from "../../Icon.svelte";
@@ -18,6 +19,7 @@
   import PageHeader from "../../components/PageHeader.svelte";
   import Section from "../../components/Section.svelte";
   import { routes } from "../../routes";
+  import { openHistory } from "../../history.svelte";
   import { app } from "../../state.svelte";
   import { converter } from "./state.svelte";
 
@@ -80,7 +82,7 @@
         {#if converter.files.length}
           <span class="zone-file">{converter.files.length} file{converter.files.length === 1 ? "" : "s"}</span>
         {:else}
-          <span class="zone-hint">Drop audio or video files here</span>
+          <span class="zone-hint" class:reselect={converter.pendingNames.length} data-testid="files-hint">{converter.pendingNames.length ? reselectHint(converter.pendingNames) : "Drop audio or video files here"}</span>
         {/if}
         {#snippet actions()}
           <button type="button" class="btn" disabled={converter.running} onclick={choose}>Choose Audio or Video Files…</button>
@@ -182,6 +184,7 @@
   warnings={converter.warnings}
   requirement={req}
   label="Convert Files"
+  onstatus={converter.lastJobId && !converter.running ? () => openHistory(converter.lastJobId) : null}
   progressLabel="Conversion progress"
   onclear={() => {
     closePreview();

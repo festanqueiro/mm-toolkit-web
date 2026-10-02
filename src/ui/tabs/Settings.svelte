@@ -3,12 +3,21 @@
   import { safeFilename } from "../../engine/naming";
   import { CLIP_TEMPLATE_ERROR, formatTemplate, PROMO_TEMPLATE_ERROR } from "../../engine/template";
   import { fileRefFromHandle, forgetRef, handleFor, queryPermission, requestPermission } from "../../io/file-ref";
+  import { formatBytes, KEEP_COPIES_CAP } from "../../engine/history";
+  import { keptBytes } from "../../io/retention";
   import { normaliseNaming, type Theme } from "../../storage/settings";
   import PageHeader from "../components/PageHeader.svelte";
   import Section from "../components/Section.svelte";
   import { app, updateSetting } from "../state.svelte";
 
   const settings = $derived(app.settings);
+
+  // ---- Kept copies (History) ----
+  let keptUsage = $state<number | null>(null);
+  $effect(() => {
+    if (!settings["web/keep_output_copies"]) return;
+    keptBytes().then((bytes) => (keptUsage = bytes), () => (keptUsage = null));
+  });
   const tier1 = $derived(app.capabilities?.directoryPicker ?? false);
 
   // ---- Default export folder (Tier 1 only) ----
@@ -207,6 +216,10 @@
         />
         Keep copies of outputs for History previews (uses browser storage)
       </label>
+      {#if settings["web/keep_output_copies"] && keptUsage !== null}
+        <span></span>
+        <p class="status field" data-testid="kept-usage">Using {formatBytes(keptUsage)} of {formatBytes(KEEP_COPIES_CAP)}. The oldest jobs' copies are removed first.</p>
+      {/if}
 
       <span class="label">Large files</span>
       <label class="check field">

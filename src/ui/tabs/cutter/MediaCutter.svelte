@@ -11,6 +11,7 @@
     kindWord,
     outputFormatStatus,
   } from "../../../engine/clips";
+  import { reselectHint } from "../../../engine/history";
   import { AUDIO_EXTENSIONS, VIDEO_EXTENSIONS } from "../../../engine/media-kind";
   import { formatTimestamp } from "../../../engine/time";
   import { pickFiles } from "../../../io/pick";
@@ -22,6 +23,7 @@
   import PageHeader from "../../components/PageHeader.svelte";
   import Section from "../../components/Section.svelte";
   import { routes } from "../../routes";
+  import { openHistory } from "../../history.svelte";
   import { app } from "../../state.svelte";
   import ClipTable from "./ClipTable.svelte";
   import { FramePlayer, NativePlayer, WaveformPlayer, type PreviewPlayer } from "./players.svelte";
@@ -206,7 +208,7 @@
             {cutter.source.checking ? "Checking…" : cutter.source.message}
           </p>
         {:else}
-          <span class="zone-hint">Drop an audio or video file here</span>
+          <span class="zone-hint" class:reselect={cutter.pendingSource} data-testid="source-hint">{cutter.pendingSource ? reselectHint([cutter.pendingSource]) : "Drop an audio or video file here"}</span>
         {/if}
         {#snippet actions()}
           <button type="button" class="btn" disabled={cutter.running} onclick={chooseSource}>Choose…</button>
@@ -309,6 +311,7 @@
   warnings={cutter.warnings}
   requirement={req}
   label={createLabel(kind)}
+  onstatus={cutter.lastJobId && !cutter.running ? () => openHistory(cutter.lastJobId) : null}
   progressLabel="Clip progress"
   onclear={() => cutter.clear()}
   oncancel={() => cutter.cancel()}

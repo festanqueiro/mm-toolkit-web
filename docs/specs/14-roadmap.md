@@ -38,7 +38,7 @@
 
 ## Phase 4 — Polish → `1.0.0`
 
-- [ ] History: Load Job with re-select flow, OPFS retention, inline preview.
+- [x] History: Load Job with re-select flow, OPFS retention (2 GB cap), inline preview, unread badge.
 - [ ] PWA: offline, install, update prompt, app badge, File Handling.
 - [ ] Settings/history import from desktop.
 - [ ] Accessibility pass: keyboard reordering for the effect list, focus management, ARIA on tables and progress.

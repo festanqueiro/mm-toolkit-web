@@ -11,6 +11,7 @@
     onclear,
     oncancel,
     onstart,
+    onstatus = null,
   }: {
     progress: { percent: number; status: string } | null;
     running: boolean;
@@ -22,13 +23,21 @@
     onclear: () => void;
     oncancel: () => void;
     onstart: () => void;
+    /** When set (a finished job), the status opens it in History. */
+    onstatus?: (() => void) | null;
   } = $props();
 </script>
 
 <footer class="action-bar">
   {#if progress}
     <div class="progress-row">
-      <p class="progress-status" data-testid="progress-status" aria-live="polite">{progress.status}</p>
+      <p class="progress-status" data-testid="progress-status" aria-live="polite">
+        {#if onstatus}
+          <button type="button" class="link" title="Open in History" onclick={onstatus}>{progress.status}</button>
+        {:else}
+          {progress.status}
+        {/if}
+      </p>
       {#if running}
         <progress max="100" value={progress.percent} aria-label={progressLabel}>{progress.percent}%</progress>
       {/if}
@@ -82,6 +91,15 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  .link {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--link);
+    text-decoration: underline;
+    font: inherit;
+    cursor: pointer;
   }
   progress {
     flex: 1;

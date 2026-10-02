@@ -111,6 +111,11 @@
     color: var(--text-muted);
     font-size: 0.92rem;
   }
+  /* Load Job named an input that has to be picked again. */
+  .zone-body :global(.zone-hint.reselect) {
+    color: var(--warn);
+    font-weight: 600;
+  }
   .zone-body :global(.status) {
     margin-top: 2px;
   }

@@ -9,6 +9,7 @@
     requirements,
     trackOptions,
   } from "../../../engine/video-creator";
+  import { reselectHint } from "../../../engine/history";
   import { filesFromDrop, pickFiles } from "../../../io/pick";
   import Icon from "../../Icon.svelte";
   import Accordion from "../../components/Accordion.svelte";
@@ -17,6 +18,7 @@
   import Modal from "../../components/Modal.svelte";
   import PageHeader from "../../components/PageHeader.svelte";
   import { routes } from "../../routes";
+  import { openHistory } from "../../history.svelte";
   import { app } from "../../state.svelte";
   import EffectsList from "./EffectsList.svelte";
   import Layers from "./Layers.svelte";
@@ -139,7 +141,7 @@
             <span class="zone-file" title={vc.audio.label}>{vc.audio.label}</span>
             <p class="status" class:ok={musicOk} class:warn={!musicOk} data-testid="audio-status">{audioStatus(vc.trackCount, true)}</p>
           {:else}
-            <span class="zone-hint">Drop an audio file or a folder here</span>
+            <span class="zone-hint" class:reselect={vc.pendingAudio} data-testid="audio-hint">{vc.pendingAudio ? reselectHint([vc.pendingAudio]) : "Drop an audio file or a folder here"}</span>
           {/if}
           {#snippet actions()}
             <button type="button" class="btn" onclick={chooseAudioFile}>Choose File…</button>
@@ -158,7 +160,7 @@
           {#if vc.visualFile}
             <span class="zone-file" title={vc.visualFile.name}>{vc.visualFile.name}</span>
           {:else}
-            <span class="zone-hint">Drop an image or video here</span>
+            <span class="zone-hint" class:reselect={vc.pendingVisual} data-testid="visual-hint">{vc.pendingVisual ? reselectHint([vc.pendingVisual]) : "Drop an image or video here"}</span>
           {/if}
           {#if visualStatus}
             <p class="status" class:ok={vc.visual?.ok} class:warn={vc.visual && !vc.visual.ok} data-testid="visual-status">{visualStatus}</p>
@@ -246,6 +248,7 @@
   warnings={vc.warnings}
   requirement={req}
   label={generateLabel(vc.trackCount)}
+  onstatus={vc.lastJobId && !vc.running ? () => openHistory(vc.lastJobId) : null}
   progressLabel="Generation progress"
   onclear={() => vc.clear()}
   oncancel={() => vc.cancel()}
