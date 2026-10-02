@@ -91,7 +91,7 @@
   };
 </script>
 
-<PageHeader title="Settings" subtitle="Defaults shared by all Media Tools features." />
+<PageHeader title="Settings" subtitle="Defaults shared by all Media Tools features." icon="settings" />
 
 <div class="stack">
   <Section title="General">
@@ -295,7 +295,7 @@
     padding: 0;
     border: 0;
     background: none;
-    color: var(--accent);
+    color: var(--link);
     text-decoration: underline;
   }
   .check {

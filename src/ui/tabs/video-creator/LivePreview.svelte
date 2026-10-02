@@ -138,10 +138,15 @@
 </script>
 
 <div class="preview">
-  <div class="stage" bind:this={container} aria-label="Live preview" role="img"></div>
-  {#if !scene}
-    <p class="status">Choose audio and a valid image or video to preview.</p>
-  {:else}
+  <div class="stage" class:empty={!scene} bind:this={container} aria-label="Live preview" role="img">
+    {#if !scene}
+      <div class="empty-state">
+        <Icon name="music_video" size={32} />
+        <p>Choose audio and a valid image or video to preview.</p>
+      </div>
+    {/if}
+  </div>
+  {#if scene}
     <div class="controls">
       <button
         type="button"
@@ -192,16 +197,35 @@
     display: grid;
     place-items: center;
     min-height: 120px;
-    border-radius: 8px;
-    background: #000;
+    border-radius: var(--radius-sm);
+    background: repeating-conic-gradient(#0b0c10 0 25%, #12141a 0 50%) 0 0 / 20px 20px;
     overflow: hidden;
   }
+  /* Fill the stage, letterboxed, so small visuals aren't postage stamps. */
   .stage :global(canvas) {
     display: block;
-    max-width: 100%;
-    max-height: 420px;
-    width: auto;
-    height: auto;
+    width: 100%;
+    height: clamp(200px, 40vh, 380px);
+    object-fit: contain;
+  }
+  .stage.empty {
+    background: var(--surface-sunken);
+    border: 1.5px dashed var(--border-strong);
+  }
+  .stage.empty :global(canvas) {
+    display: none;
+  }
+  .empty-state {
+    display: grid;
+    justify-items: center;
+    gap: 6px;
+    padding: 28px 16px;
+    color: var(--text-muted);
+    text-align: center;
+  }
+  .empty-state p {
+    margin: 0;
+    font-size: 0.92rem;
   }
   .controls {
     display: flex;

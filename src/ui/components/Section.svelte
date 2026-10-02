@@ -14,11 +14,12 @@
     border: 1px solid var(--border);
     border-radius: var(--radius);
     background: var(--surface);
-    padding: 16px 18px 18px;
+    box-shadow: var(--shadow-sm);
+    padding: 18px 20px 20px;
   }
   h2 {
-    margin: 0 0 14px;
-    font-size: 1rem;
+    margin: 0 0 16px;
+    font-size: 1.02rem;
     font-weight: 700;
   }
 </style>

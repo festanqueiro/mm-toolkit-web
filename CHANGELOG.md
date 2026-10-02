@@ -6,6 +6,26 @@ policy in `CLAUDE.md` (patch by default, minor/major only when requested).
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-10-02
+
+### Added
+- Brand identity from the logo:
+  - A sticky header with the logo and wordmark, pill-style tabs and an "On-device" privacy badge.
+  - A site footer and a skip-to-content link.
+  - Favicons (32/64 px), an Apple touch icon, a web app manifest (192/512 px icons), theme colours and Open Graph/Twitter social-preview tags.
+
+### Changed
+- UI refresh:
+  - Theme tokens built on the logo's blue and magenta, keeping AA contrast in light and dark.
+  - Page headers with icon tiles, softer cards and shadows, and consistent button, input and focus styles.
+  - Accordions with a rotating chevron and a summary of their state while collapsed.
+- Video Creator:
+  - Input is now two drop zones with icons and an inline thumbnail.
+  - The preview has an empty state and scales small visuals up to fill the stage.
+  - The effects list has drag handles.
+  - The action bar floats above the page.
+- About is a branded hero with tool chips, a "Private by design" note and the capabilities list. Unbuilt tools show a "Coming soon" card.
+
 ## [0.1.6] - 2026-10-02
 
 ### Added

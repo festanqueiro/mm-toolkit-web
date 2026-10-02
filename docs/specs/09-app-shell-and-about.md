@@ -2,7 +2,9 @@
 
 ## Shell
 
-- Window title / document title: **MM Toolkit**.
+- Document title: `{Tab} · MM Toolkit`.
+- **Header** (web): a sticky bar with the logo (32 px) and the **MM Toolkit** wordmark, pill tabs (the active one in the accent colour), and an **On-device** badge. Below ~980 px the tabs move to a scrolling row under the brand. A footer repeats the privacy line, the version and the GitHub link.
+- **Brand**: the logo's sky blue `#7cc5ff` and magenta `#f840d0` (`--brand-blue`, `--brand-pink`). Text-bearing accents use AA-safe shades per theme. Icons: favicons 32/64 px, Apple touch icon, and the manifest's 192/512 px icons, all generated from `assets/mm-toolkit-logo.png`. Social preview: `public/social-preview.png`.
 - Tabs in order, each with a Material icon:
 
   | Tab | Icon |
@@ -14,7 +16,7 @@
   | Settings | `settings` |
   | About | `info` |
 
-  Other icons used: `play_arrow`, `stop`, `delete`.
+  Other icons used: `play_arrow`, `stop`, `delete`, `expand_more`, `folder_open`, `audiotrack`, `image`, `lock`, `drag_indicator`.
 - **Routing**: one hash route per tab (`#/video-creator`, `#/cutter`, `#/converter`, `#/history`, `#/settings`, `#/about`) so reloads keep the tab. Hash routing needs no server rewrites.
 - Desktop sizing: min 820×620, default 1100×820. Web: responsive. Two-column tool layouts collapse to one column below ~900 px.
 - Page padding 28/24 px. Section spacing 10–14 px. Primary action buttons are at least 44 px tall.
