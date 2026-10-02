@@ -6,6 +6,17 @@ policy in `CLAUDE.md` (patch by default, minor/major only when requested).
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-10-02
+
+### Added
+- **Generate Video(s)**: the full promo render in a Worker.
+  - Per track: snippet decode, bass envelope, Layers, the WebGL effect cascade and video fade, the audio fade, and the optional looped original video sound.
+  - Encoding: WebCodecs H.264 + AAC (Opus/VP9/AV1 fallbacks with a warning), written to MP4.
+  - Output: into the chosen folder with the naming template and conflict policy (Chrome/Edge), or downloaded / ZIPped (Safari/Firefox), with an in-memory fallback when private storage is unavailable.
+  - Progress, Cancel ("Cancelling safely…" → "Cancelled. Partial files were removed."), and the "Generation failed" dialog with details.
+- Successful jobs are recorded in History (newest 20) and send the "Promo video finished" notification when enabled. Leaving the page during a job asks first, and the screen stays awake.
+- Windowed-sinc resampler (output audio at 44.1 kHz, as on desktop) and `AudioLoop` port.
+
 ## [0.1.7] - 2026-10-02
 
 ### Added

@@ -7,10 +7,15 @@ import { resolveOutput, type ConflictPolicy } from "../engine/naming";
 
 export type OutputRef = {
   name: string;
-  /** "directory": written into the user's folder; "staged": in OPFS, awaiting download. */
-  sink: "directory" | "staged";
+  /**
+   * "directory": written into the user's folder; "staged": in OPFS, awaiting download;
+   * "memory": held in memory (no OPFS, e.g. private browsing), carried in `file`.
+   */
+  sink: "directory" | "staged" | "memory";
   /** OPFS path segments for staged outputs. */
   opfsPath?: string[];
+  /** In-memory outputs only. */
+  file?: File;
   size?: number;
 };
 
@@ -108,6 +113,45 @@ export class DirectorySink implements OutputSink {
   }
 }
 
+/**
+ * Staging without OPFS (Safari private browsing, some test profiles): outputs are kept in
+ * memory and handed to the page as `File`s for download. Fine for promo-sized outputs.
+ */
+export class MemorySink implements OutputSink {
+  readonly kind = "memory" as const;
+  private readonly files = new Map<string, File>();
+
+  async exists(name: string): Promise<boolean> {
+    return this.files.has(name);
+  }
+
+  resolveName(requested: string, policy: ConflictPolicy): Promise<string | null> {
+    return resolveOutput(requested, policy, async (candidate) => this.files.has(candidate));
+  }
+
+  async create(name: string): Promise<WritableStream<Uint8Array>> {
+    const chunks: Uint8Array[] = [];
+    return new WritableStream<Uint8Array>({
+      write: (chunk) => {
+        chunks.push(chunk.slice());
+      },
+      close: () => {
+        this.files.set(name, new File(chunks as BlobPart[], name, { type: name.endsWith(".mp4") ? "video/mp4" : "" }));
+      },
+    });
+  }
+
+  async remove(name: string): Promise<void> {
+    this.files.delete(name);
+  }
+
+  async complete(name: string): Promise<OutputRef> {
+    const file = this.files.get(name);
+    if (!file) throw new Error(`${name} was not written.`);
+    return { name, sink: "memory", file, size: file.size };
+  }
+}
+
 const STAGING_ROOT = "exports";
 
 /** A fresh OPFS folder for one job's outputs, delivered later as downloads or a ZIP. */
@@ -120,10 +164,29 @@ export async function createStagingSink(jobId: string, root?: FileSystemDirector
 
 /** Resolve a staged output back to its file. */
 export async function stagedFile(ref: OutputRef, root?: FileSystemDirectoryHandle): Promise<File> {
+  if (ref.file) return ref.file;
   if (!ref.opfsPath?.length) throw new Error(`${ref.name} is not a staged output.`);
   let dir = root ?? (await navigator.storage.getDirectory());
   for (const segment of ref.opfsPath.slice(0, -1)) dir = await dir.getDirectoryHandle(segment);
   return (await dir.getFileHandle(ref.opfsPath.at(-1)!)).getFile();
+}
+
+/**
+ * Remove every staged job except `keep`. Never call this right after a download starts: the
+ * download reads the OPFS file lazily, so deleting it cancels the download. Clean up when
+ * the next job starts or the app loads instead.
+ */
+export async function clearAllStaging(keep: string[] = [], root?: FileSystemDirectoryHandle): Promise<void> {
+  const opfs = root ?? (await navigator.storage.getDirectory());
+  let exports: FileSystemDirectoryHandle;
+  try {
+    exports = await opfs.getDirectoryHandle(STAGING_ROOT);
+  } catch {
+    return;
+  }
+  const names: string[] = [];
+  for await (const name of (exports as unknown as { keys: () => AsyncIterable<string> }).keys()) names.push(name);
+  for (const name of names) if (!keep.includes(name)) await exports.removeEntry(name, { recursive: true }).catch(() => {});
 }
 
 /** Remove a job's staging folder (after delivery, unless outputs are kept for History). */

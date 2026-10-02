@@ -4,7 +4,8 @@
  * Worker and Web Audio.
  */
 import type { Image8 } from "../../../engine/effects/cpu/image";
-import { defaultEffectSettings, fromEffectsState, type EffectSettings } from "../../../engine/effects/settings";
+import { defaultEffectSettings, fromEffectsState, toEffectsState, type EffectSettings } from "../../../engine/effects/settings";
+import type { PromoJob } from "../../../engine/render/promo";
 import { formatTimestamp, parseTimestamp } from "../../../engine/time";
 import {
   audioFilesFromFile,
@@ -16,13 +17,19 @@ import {
   previewStatus,
   proposedStart,
   OUTPUT_DEFAULTS,
+  PROFILES,
+  trackOptions,
   TIMESTAMPS_HINT,
   type AudioBitrate,
   type Quality,
   type TrackRow,
 } from "../../../engine/video-creator";
 import { fileRefFromHandle, forgetRef, handleFor, queryPermission, requestPermission, trackIdentity, type FileRef } from "../../../io/file-ref";
+import { deliverStaged } from "../../../io/deliver";
 import { decodeImage } from "../../../io/image-decode";
+import { clearAllStaging, type OutputRef } from "../../../io/sink";
+import { addHistory, historyId, localTimestamp } from "../../../storage/history";
+import type { RenderEvent, RenderRequest } from "../../../workers/render-protocol";
 import type { Picked } from "../../../io/pick";
 import { probeVisual, type VisualProbe } from "../../../io/visual";
 import { decodeAudioFile, detectDrop } from "../../../workers/media-client";
@@ -60,6 +67,16 @@ class VideoCreatorState {
   fps = $state(OUTPUT_DEFAULTS.fps);
   quality = $state<Quality>(OUTPUT_DEFAULTS.quality);
   audioBitrate = $state<AudioBitrate>(OUTPUT_DEFAULTS.audioBitrate);
+
+  // Generation progress (footer). `status` is the desktop's progress label.
+  progress = $state<{ percent: number; status: string; outputs: number } | null>(null);
+  warnings = $state<string[]>([]);
+  failure = $state<{ message: string; details: string } | null>(null);
+  cancelling = $state(false);
+  private worker: Worker | null = null;
+  /** The chosen export folder's live handle (persisted copies are only needed after a reload). */
+  private outputHandle: FileSystemDirectoryHandle | null = null;
+  private wakeLock: { release: () => Promise<void> } | null = null;
 
   /** Registered by the live preview so a table ▶ stops it (only one audio preview at a time). */
   stopLivePreview: (() => void) | null = null;
@@ -231,23 +248,173 @@ class VideoCreatorState {
       throw error;
     }
     const previous = this.output;
+    this.outputHandle = handle;
     this.output = await fileRefFromHandle(handle);
     this.outputPermission = await queryPermission(handle, "readwrite");
     if (previous && previous.id !== app.settings["general/default_output"]?.id && previous.id !== app.settings.output?.id) await forgetRef(previous);
   }
 
+  private async currentOutputHandle(): Promise<FileSystemDirectoryHandle | null> {
+    if (this.outputHandle && this.output) return this.outputHandle;
+    this.outputHandle = await handleFor<FileSystemDirectoryHandle>(this.output);
+    return this.outputHandle;
+  }
+
   async reallowOutput(): Promise<void> {
-    const handle = await handleFor(this.output);
+    const handle = await this.currentOutputHandle();
     if (handle && (await requestPermission(handle, "readwrite"))) this.outputPermission = "granted";
   }
 
   async refreshOutputPermission(): Promise<void> {
-    const handle = await handleFor(this.output);
+    this.outputHandle = null;
+    const handle = await this.currentOutputHandle();
     this.outputPermission = handle ? await queryPermission(handle, "readwrite") : "none";
+  }
+
+  /** Generate Video(s): build the job, run it in the render Worker, deliver, record History. */
+  async generate(): Promise<void> {
+    if (this.running || !this.visualFile || !this.visual?.ok) return;
+    const { options, error } = trackOptions(this.rows);
+    if (error || !options.length) return;
+    this.stopPreview();
+    this.stopLivePreview?.();
+    this.running = true;
+    this.cancelling = false;
+    this.failure = null;
+    this.warnings = [];
+    this.progress = { percent: 0, status: "Preparing…", outputs: 0 };
+    const s = app.settings;
+    const effects = $state.snapshot(this.effects) as EffectSettings;
+    // Desktop saves these when generation starts.
+    void updateSetting("promo/effects_state", JSON.stringify(toEffectsState(effects)));
+    void updateSetting("promo/video_fade", this.videoFade);
+    void updateSetting("promo/audio_fade", this.audioFade);
+    void updateSetting("promo/mute_original_video_audio", this.muteOriginal);
+    if (this.output) void updateSetting("output", $state.snapshot(this.output) as FileRef);
+
+    const jobId = historyId();
+    const tier1 = !!app.capabilities?.directoryPicker;
+    if (!s["web/keep_output_copies"]) await clearAllStaging().catch(() => {});
+    try {
+      const visual = this.visual;
+      const job: PromoJob = {
+        tracks: this.rows.map((row, i) => ({ file: this.filesByKey.get(row.key)!, start: options[i]!.start, duration: options[i]!.duration })),
+        visual: { file: this.visualFile, kind: visual.kind, image: visual.kind === "image" ? await decodeImage(this.visualFile) : null },
+        effects,
+        backgroundImage: this.layers.background.image,
+        overlayImage: this.layers.overlay.image,
+        profile: PROFILES[this.profile]?.size ?? null,
+        fps: this.fps,
+        quality: this.quality,
+        audioBitrate: parseInt(this.audioBitrate, 10) * 1000,
+        videoFade: this.videoFade,
+        audioFade: this.audioFade,
+        muteOriginalVideoAudio: this.muteOriginal,
+        naming: s["general/promo_naming"],
+        conflict: s["general/conflict_policy"],
+      };
+      const handle = tier1 ? await this.currentOutputHandle() : null;
+      if (tier1 && !handle) throw new Error("Choose a writable export folder.");
+      const outputs = await this.runWorker({
+        type: "start",
+        job,
+        destination: handle ? { kind: "directory", handle } : { kind: "staging", jobId },
+      });
+      if (outputs === null) {
+        this.progress = { percent: this.progress?.percent ?? 0, status: "Cancelled. Partial files were removed.", outputs: 0 };
+        return;
+      }
+      // Staged copies stay until the next job or app load: deleting them now would cancel the download.
+      if (!handle && outputs.length) await deliverStaged(outputs, { zip: s["web/zip_batches"], tool: "Video Creator" });
+      await this.record(jobId, effects, options, outputs, !!handle);
+      this.progress = { percent: 100, status: `Finished ${outputs.length} video${outputs.length === 1 ? "" : "s"}`, outputs: outputs.length };
+      this.notify(outputs.length);
+    } catch (error) {
+      const err = error as Error & { details?: string };
+      this.failure = { message: err.message, details: err.details ?? err.stack ?? "" };
+      this.progress = null;
+    } finally {
+      this.running = false;
+      this.worker?.terminate();
+      this.worker = null;
+      void this.wakeLock?.release().catch(() => {});
+      this.wakeLock = null;
+    }
+  }
+
+  cancel(): void {
+    if (!this.worker || this.cancelling) return;
+    this.cancelling = true;
+    if (this.progress) this.progress = { ...this.progress, status: "Cancelling safely…" };
+    this.worker.postMessage({ type: "cancel" } satisfies RenderRequest);
+  }
+
+  /** Resolves with the outputs, or null when cancelled; rejects on failure. */
+  private runWorker(request: RenderRequest): Promise<OutputRef[] | null> {
+    const nav = navigator as Navigator & { wakeLock?: { request: (type: "screen") => Promise<{ release: () => Promise<void> }> } };
+    nav.wakeLock?.request("screen").then((lock) => (this.wakeLock = lock), () => {});
+    return new Promise((resolve, reject) => {
+      const worker = new Worker(new URL("../../../workers/render.worker.ts", import.meta.url), { type: "module", name: "render" });
+      this.worker = worker;
+      worker.onmessage = (event: MessageEvent<RenderEvent>) => {
+        const e = event.data;
+        if (e.type === "progress") {
+          if (!this.cancelling) this.progress = { percent: e.percent, status: e.status, outputs: 0 };
+        } else if (e.type === "warn") {
+          if (!this.warnings.includes(e.message)) this.warnings = [...this.warnings, e.message];
+        } else if (e.type === "done") resolve(e.outputs);
+        else if (e.type === "cancelled") resolve(null);
+        else reject(Object.assign(new Error(e.message), { details: e.details }));
+      };
+      worker.onerror = (event) => reject(new Error(event.message || "The render worker stopped unexpectedly."));
+      worker.postMessage(request);
+    });
+  }
+
+  private async record(id: string, effects: EffectSettings, options: { start: number; duration: number }[], outputs: OutputRef[], directory: boolean) {
+    const ref = (f: File | null | undefined) => (f ? { name: f.name, size: f.size, lastModified: f.lastModified } : null);
+    try {
+      await addHistory({
+        id,
+        tool: "promo",
+        created: localTimestamp(),
+        source: this.audio ? { name: this.audio.label, kind: this.audio.folder ? "directory" : "file" } : null,
+        cover: ref(this.visualFile),
+        output: directory ? $state.snapshot(this.output) : { name: "Downloads" },
+        bass_effect: effects.bass_blur.enabled,
+        effects: toEffectsState(effects),
+        video_fade: this.videoFade,
+        audio_fade: this.audioFade,
+        mute_original_video_audio: this.muteOriginal,
+        tracks: this.rows.map((row, i) => ({ path: ref(this.filesByKey.get(row.key)), start: options[i]!.start, duration: options[i]!.duration })),
+        fps: this.fps,
+        profile: PROFILES[this.profile]?.size ?? null,
+        quality: this.quality,
+        audio_bitrate: this.audioBitrate,
+        // References only: in-memory outputs' bytes don't belong in History.
+        outputs: outputs.map((ref) => ({ name: ref.name, sink: ref.sink, size: ref.size, opfsPath: ref.opfsPath })),
+      });
+    } catch {
+      // History is best effort (storage may be unavailable).
+    }
+  }
+
+  /** Desktop completion signal: "Promo video finished" / "Created {n} file{s}." */
+  private notify(count: number): void {
+    if (!app.settings["general/notify_finished"] || typeof Notification === "undefined" || Notification.permission !== "granted") return;
+    try {
+      const n = new Notification("Promo video finished", { body: count ? `Created ${count} file${count === 1 ? "" : "s"}.` : "Finished.", icon: "favicon.png" });
+      n.onclick = () => window.focus();
+    } catch {
+      // Some browsers only allow notifications from a service worker.
+    }
   }
 
   /** Clear: inputs, effects and output back to defaults (desktop `clear`). The drop lead-in is kept. */
   clear(): void {
+    if (this.running) return;
+    this.progress = null;
+    this.warnings = [];
     this.stopPreview();
     this.stopLivePreview?.();
     this.audio = null;
