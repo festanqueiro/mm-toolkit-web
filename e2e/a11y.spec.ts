@@ -27,7 +27,7 @@ const pages: Record<string, (page: Page) => Promise<void>> = {
   },
   cutter: async (page) => {
     await page.goto("/#/cutter");
-    await pick(page, "Input", "Choose…", golden("audio/short-10s-mono.wav"));
+    await pick(page, "Source", "Choose…", golden("audio/short-10s-mono.wav"));
     await expect(page.getByTestId("source-status")).toHaveText("✓ Source audio ready.");
   },
   converter: async (page) => {

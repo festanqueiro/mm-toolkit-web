@@ -23,7 +23,7 @@ async function cutTwoClips(page: Page, browserName: string) {
   await page.getByLabel("Title for clip 2").fill("Outro");
   await page.getByLabel("Start for clip 2").fill("00:00:08");
   await page.getByLabel("End for clip 2").fill("9");
-  if (browserName === "chromium") await page.getByRole("region", { name: /clip output$/ }).getByRole("button", { name: "Choose…" }).click();
+  if (browserName === "chromium") await page.getByRole("region", { name: "Export" }).getByRole("button", { name: "Choose…" }).click();
   const download = browserName === "chromium" ? null : page.waitForEvent("download");
   await page.getByRole("button", { name: "Create Audio Clips" }).click();
   await download;

@@ -27,7 +27,7 @@ async function open(page: Page, browserName: string) {
 
 async function chooseSource(page: Page, path: string) {
   const chooser = page.waitForEvent("filechooser");
-  await page.getByRole("region", { name: "Input" }).getByRole("button", { name: "Choose…" }).click();
+  await page.getByRole("region", { name: "Source" }).getByRole("button", { name: "Choose…" }).click();
   await (await chooser).setFiles(path);
   await expect(page.getByTestId("source-status")).toHaveText("✓ Source ready.");
 }
@@ -36,7 +36,7 @@ async function chooseSource(page: Page, path: string) {
 async function split(page: Page, browserName: string, count: number): Promise<Map<string, Uint8Array>> {
   const finished = `Finished ${count} stem${count === 1 ? "" : "s"}`;
   if (browserName === "chromium") {
-    await page.getByRole("region", { name: "Stems to export" }).getByRole("button", { name: "Choose…" }).click();
+    await page.getByRole("region", { name: "Export" }).getByRole("button", { name: "Choose…" }).click();
     await page.getByRole("button", { name: "Split Stems" }).click();
     await expect(page.getByTestId("progress-status")).toHaveText(finished, { timeout: 120_000 });
     const names = await opfsNames(page);
@@ -100,7 +100,9 @@ test("splits vocals and instrumental: 44.1 kHz stereo, full length, the right st
   // Stand-in model: vocals = 0.1 of the mix, instrumental = drums + bass + other = 0.9.
   expect(instrumental.rms / vocals.rms).toBeGreaterThan(8.5);
   expect(instrumental.rms / vocals.rms).toBeLessThan(9.5);
-  await expect(page.getByRole("list", { name: "Stems" }).locator("audio")).toHaveCount(2);
+  const results = page.getByRole("complementary", { name: "Output" }).getByRole("list", { name: "Results" });
+  await expect(results.locator("audio")).toHaveCount(2);
+  await expect(results.getByRole("button", { name: "Download" })).toHaveCount(2);
   const [record] = await historyRecords(page);
   expect(record).toMatchObject({ tool: "stems", stems: ["vocals", "instrumental"], format: "wav" });
 });
@@ -139,7 +141,7 @@ test("cancel leaves no files, and the same worker runs the next job", async ({ p
   test.setTimeout(120_000);
   await open(page, browserName);
   await chooseSource(page, golden("audio/drop-30s-stereo.wav"));
-  if (browserName === "chromium") await page.getByRole("region", { name: "Stems to export" }).getByRole("button", { name: "Choose…" }).click();
+  if (browserName === "chromium") await page.getByRole("region", { name: "Export" }).getByRole("button", { name: "Choose…" }).click();
   await page.getByRole("button", { name: "Split Stems" }).click();
   await page.getByRole("button", { name: "Cancel" }).click();
   await expect(page.getByTestId("progress-status")).toHaveText("Cancelled. Partial files were removed.", { timeout: 60_000 });

@@ -24,7 +24,7 @@ async function choose(page: Page, name: string) {
   await breakNativePlayback(page);
   await page.goto("/#/cutter");
   const chooser = page.waitForEvent("filechooser");
-  await page.getByRole("region", { name: "Input" }).getByRole("button", { name: "Choose…" }).click();
+  await page.getByRole("region", { name: "Source" }).getByRole("button", { name: "Choose…" }).click();
   await (await chooser).setFiles(media(name));
 }
 

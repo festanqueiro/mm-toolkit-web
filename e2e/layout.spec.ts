@@ -71,3 +71,25 @@ test("narrow screens: one column, the action in a bottom bar, no overflow", asyn
   await expect(page.getByTestId("requirements")).toHaveCount(1);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
 });
+
+test("the Cutter's rail lists every clip with a player", async ({ page, browserName }) => {
+  if (browserName === "chromium") await mockFolderPicker(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/#/cutter");
+  const chooser = page.waitForEvent("filechooser");
+  await page.getByRole("region", { name: "Source" }).getByRole("button", { name: "Choose…" }).click();
+  await (await chooser).setFiles(golden("audio/short-10s-mono.wav"));
+  await expect(page.getByTestId("source-status")).toHaveText("✓ Source audio ready.");
+  await page.getByLabel("Duration for clip 1").fill("1");
+  await page.getByRole("button", { name: "Add clip" }).click();
+  await page.getByLabel("Start for clip 2").fill("2");
+  await page.getByLabel("Duration for clip 2").fill("1");
+  if (browserName === "chromium") await page.getByRole("region", { name: "Export" }).getByRole("button", { name: "Choose…" }).click();
+  const download = browserName === "chromium" ? null : page.waitForEvent("download");
+  await page.getByRole("button", { name: "Create Audio Clips" }).click();
+  await download;
+  await expect(page.getByTestId("progress-status")).toHaveText("Finished 2 clips", { timeout: 60_000 });
+  const results = page.getByRole("complementary", { name: "Output" }).getByRole("list", { name: "Results" });
+  await expect(results.getByRole("listitem")).toHaveCount(2);
+  await expect(results.locator("audio")).toHaveCount(2);
+});

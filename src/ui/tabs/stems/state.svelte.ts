@@ -7,7 +7,7 @@ import { HTDEMUCS, modelCached, type ModelDescriptor } from "../../../engine/ste
 import { DEFAULT_STEMS, orderStems, SOURCE_READY, STEM_CHOICES, STEM_FORMATS, STEM_PROGRESS, finishedStems, type StemChoice, type StemFormat } from "../../../engine/stems/rules";
 import type { FileRef } from "../../../io/file-ref";
 import { deliverStaged } from "../../../io/deliver";
-import { isFolderRef, resolveOutputs, type AvailableOutput } from "../../../io/history-outputs";
+import { isFolderRef, type AvailableOutput } from "../../../io/history-outputs";
 import { probeSource } from "../../../io/media-probe";
 import { prepareStaging } from "../../../io/retention";
 import type { OutputRef } from "../../../io/sink";
@@ -16,6 +16,7 @@ import type { ToolRequest, Undecodable } from "../../../workers/render-protocol"
 import { decodeAtNativeRate } from "../../../workers/media-client";
 import { jobRecorded } from "../../history.svelte";
 import { historyOutputs, notifyFinished, runJob } from "../../job-runner";
+import { jobResults, savedToLabel } from "../../job-results";
 import { OutputFolder } from "../../output-folder.svelte";
 import { app } from "../../state.svelte";
 
@@ -44,6 +45,7 @@ class StemSplitterState {
   failure = $state<{ message: string; details: string } | null>(null);
   /** The last job's stems, playable inline. */
   results = $state.raw<AvailableOutput[]>([]);
+  savedTo = $state("");
 
   private worker: Worker | null = null;
   private token = 0;
@@ -131,9 +133,8 @@ class StemSplitterState {
         outputs: historyOutputs(outputs),
       };
       // Resolve before delivering: the in-memory fallback's files are only in `outputs`.
-      this.results = outputs.some((o) => o.file)
-        ? outputs.filter((o) => o.file).map((o) => ({ name: o.name, open: async () => o.file!, staged: false }))
-        : (await resolveOutputs(record)).files;
+      this.results = await jobResults(outputs, record).catch(() => []);
+      this.savedTo = savedToLabel(!!handle, this.folder.ref?.name);
       if (!handle && outputs.length) await deliverStaged(outputs, { zip: s["web/zip_batches"], tool: "Stem Splitter" });
       try {
         await addHistory(record);

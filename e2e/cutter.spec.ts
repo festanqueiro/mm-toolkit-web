@@ -14,13 +14,13 @@ async function open(page: Page, browserName: string) {
 
 async function chooseSource(page: Page, path: string) {
   const chooser = page.waitForEvent("filechooser");
-  await page.getByRole("region", { name: "Input" }).getByRole("button", { name: "Choose…" }).click();
+  await page.getByRole("region", { name: "Source" }).getByRole("button", { name: "Choose…" }).click();
   await (await chooser).setFiles(path);
 }
 
 async function chooseFolder(page: Page, browserName: string) {
   if (browserName !== "chromium") return;
-  await page.getByRole("region", { name: /clip output$/ }).getByRole("button", { name: "Choose…" }).click();
+  await page.getByRole("region", { name: "Export" }).getByRole("button", { name: "Choose…" }).click();
   await expect(page.getByTestId("output-status")).toHaveText("✓ Export folder is writable.");
 }
 
@@ -50,7 +50,7 @@ test("lists what's missing, validates rows and names the output format", async (
   await chooseSource(page, golden("audio/short-10s-mono.wav"));
   await expect(page.getByTestId("source-status")).toHaveText("✓ Source audio ready.");
   await expect(page.getByTestId("format-status")).toHaveText("✓ Audio clips will be exported as WAV files.");
-  await expect(page.getByRole("region", { name: "Audio clip output" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Export" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Create Audio Clips" })).toBeVisible();
   if (browserName !== "chromium") await expect(page.getByTestId("output-status")).toHaveText("Clips are saved to your browser's Downloads folder.");
 
