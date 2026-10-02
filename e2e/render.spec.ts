@@ -9,20 +9,18 @@ const media = (name: string) => fileURLToPath(new URL(`../fixtures/media/${name}
 async function setUp(page: Page, browserName: string, duration = "2") {
   if (browserName === "chromium") await mockFolderPicker(page);
   await page.goto("/#/video-creator");
-  const input = page.getByRole("region", { name: "Input" });
   let chooser = page.waitForEvent("filechooser");
-  await input.getByRole("button", { name: "Choose File…" }).click();
+  await page.getByRole("region", { name: "Audio" }).getByRole("button", { name: "Choose File…" }).click();
   await (await chooser).setFiles(golden("audio/drop-30s-stereo.wav"));
   chooser = page.waitForEvent("filechooser");
-  await input.getByRole("button", { name: "Choose…", exact: true }).click();
+  await page.getByRole("region", { name: "Image or video" }).getByRole("button", { name: "Choose…", exact: true }).click();
   await (await chooser).setFiles(media("visual-320x240.png"));
   await expect(page.getByTestId("visual-status")).toHaveText("✓ Image ready.");
-  await page.getByRole("button", { name: "Audio timestamps" }).click();
   await page.getByLabel("Start for track 1").fill("27");
   await page.getByLabel("Duration for track 1 in seconds").fill(duration);
   await page.getByLabel("Duration for track 1 in seconds").blur();
   if (browserName === "chromium") {
-    await page.getByRole("region", { name: "Output" }).getByRole("button", { name: "Choose…" }).click();
+    await page.getByRole("region", { name: "Export" }).getByRole("button", { name: "Choose…" }).click();
     await expect(page.getByTestId("output-status")).toHaveText("✓ Export folder is writable.");
   }
   await expect(page.getByTestId("requirements")).toHaveText("✓ Ready to generate videos.");
@@ -52,6 +50,8 @@ test("renders a promo MP4 with the snippet's duration, the visual's size and ste
   expect(info.duration).toBeLessThan(2.15);
   expect(info.audio?.channels).toBe(2);
   expect([44_100, 48_000]).toContain(info.audio?.sampleRate);
+  const results = page.getByRole("complementary", { name: "Output" }).getByRole("list", { name: "Results" });
+  await expect(results.locator("video")).toHaveCount(1);
 });
 
 test("a second render with the same name gets a numbered copy (Chromium folder export)", async ({ page, browserName }) => {
@@ -103,22 +103,18 @@ test("a video visual loops its frames and can mix in its own sound", async ({ pa
   test.setTimeout(120_000);
   if (browserName === "chromium") await mockFolderPicker(page);
   await page.goto("/#/video-creator");
-  const input = page.getByRole("region", { name: "Input" });
   let chooser = page.waitForEvent("filechooser");
-  await input.getByRole("button", { name: "Choose File…" }).click();
+  await page.getByRole("region", { name: "Audio" }).getByRole("button", { name: "Choose File…" }).click();
   await (await chooser).setFiles(golden("audio/short-10s-mono.wav"));
   chooser = page.waitForEvent("filechooser");
-  await input.getByRole("button", { name: "Choose…", exact: true }).click();
+  await page.getByRole("region", { name: "Image or video" }).getByRole("button", { name: "Choose…", exact: true }).click();
   await (await chooser).setFiles(media("clip-320x240.webm"));
   await expect(page.getByTestId("visual-status")).toHaveText("✓ Video ready.");
-  await page.getByRole("button", { name: "Audio timestamps" }).click();
   // 2.5 s of output from a 1 s clip: the visual loops.
   await page.getByLabel("Duration for track 1 in seconds").fill("2.5");
   await page.getByLabel("Duration for track 1 in seconds").blur();
-  await page.getByRole("button", { name: "Post-Effects" }).click();
   await page.getByLabel("Mute original video sound").uncheck();
-  await page.getByRole("button", { name: "Output" }).click();
-  if (browserName === "chromium") await page.getByRole("region", { name: "Output" }).getByRole("button", { name: "Choose…" }).click();
+  if (browserName === "chromium") await page.getByRole("region", { name: "Export" }).getByRole("button", { name: "Choose…" }).click();
   const download = browserName === "chromium" ? null : page.waitForEvent("download", { timeout: 90_000 });
   await page.getByRole("button", { name: "Generate Video" }).click();
   await expect(page.getByTestId("progress-status")).toHaveText("Finished 1 video", { timeout: 90_000 });

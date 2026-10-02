@@ -78,6 +78,10 @@
     background: var(--surface);
     box-shadow: var(--shadow-sm);
     padding: 14px 16px;
+    /* When Preview + Export overflow the rail, the action stays pinned to its bottom. */
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
   }
   .bar {
     position: sticky;

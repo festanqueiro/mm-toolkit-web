@@ -63,6 +63,19 @@ test("the rail stays in view while the setup scrolls (wide screens)", async ({ p
   expect(box.y + box.height).toBeLessThanOrEqual(600);
 });
 
+test("the action stays visible when the rail is taller than the screen", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 760 });
+  await page.goto("/#/video-creator");
+  const rail = page.getByRole("complementary", { name: "Output" });
+  const button = rail.getByRole("button", { name: /Generate Videos?/ });
+  // Once the setup scrolls, the rail sits at its sticky top.
+  await page.evaluate(() => scrollTo(0, 400));
+  await expect.poll(() => page.evaluate(() => scrollY)).toBeGreaterThan(100);
+  const box = (await button.boundingBox())!;
+  expect(box.y + box.height).toBeLessThanOrEqual(760);
+  expect(await rail.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
+});
+
 test("narrow screens: one column, the action in a bottom bar, no overflow", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 800 });
   await page.goto("/#/converter");
