@@ -1,6 +1,6 @@
 # 11 — Data Model & Persistence
 
-Desktop uses `QSettings("MM Toolkit", "MM Toolkit")`. The web app uses **IndexedDB** (one database, `mm-toolkit`). Small scalar settings may be mirrored to `localStorage` for synchronous first paint. **All key names stay identical to desktop**, so a future "import desktop settings/history" (JSON) is trivial.
+Desktop uses `QSettings("MM Toolkit", "MM Toolkit")`. The web app uses **IndexedDB** (one database, `mm-toolkit`). Small scalar settings may be mirrored to `localStorage` for synchronous first paint. **All key names stay identical to desktop** (a desktop import was planned but has been dropped; see below).
 
 ## Stores
 
@@ -91,4 +91,4 @@ type OutputRef = { name: string; sink: "directory" | "download" | "zip"; fileRef
 ## Import/export (nice-to-have, Phase 4)
 
 - "Export settings & history" → a JSON file.
-- "Import from desktop" accepts the same shape. The desktop can produce it with a small script that dumps its `QSettings`.
+- ~~"Import from desktop"~~: dropped (2026-10-02). The desktop app may be discontinued, so the web app won't import its settings or history. Keeping the desktop key names stays harmless.
