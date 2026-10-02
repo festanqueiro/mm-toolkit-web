@@ -1,6 +1,7 @@
 <script lang="ts">
   import logo from "../../../assets/mm-toolkit-logo-600.png";
   import { detectCapabilities, type Capabilities } from "../../engine/media/capabilities";
+  import { install, pwa } from "../pwa.svelte";
 
   const version = __APP_VERSION__;
   const devBuild = __DEV_BUILD__;
@@ -31,6 +32,9 @@
       <li class="chip blue">Media Converter</li>
     </ul>
     <p class="links">
+      {#if pwa.canInstall}
+        <button type="button" class="btn primary" onclick={install}>Install app</button>
+      {/if}
       <a class="btn" href="https://github.com/festanqueiro/mm-toolkit-web">Web app on GitHub</a>
       <a class="btn ghost" href="https://github.com/festanqueiro/mm-toolkit">Desktop app</a>
     </p>

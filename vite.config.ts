@@ -1,8 +1,9 @@
 import { execSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 import { playwright } from "@vitest/browser-playwright";
 import { defineConfig } from "vitest/config";
+import { serviceWorkerSource } from "./scripts/pwa";
 
 const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf-8")) as { version: string };
 
@@ -40,10 +41,24 @@ const cspMeta = {
   transformIndexHtml: () => [{ tag: "meta", attrs: { "http-equiv": "Content-Security-Policy", content: CSP }, injectTo: "head-prepend" as const }],
 };
 
+/**
+ * Emit the service worker (spec 09 "PWA") with every built and public file to precache and
+ * the app version as its cache name. Production builds only.
+ */
+const serviceWorker = {
+  name: "service-worker",
+  apply: "build" as const,
+  generateBundle(this: { emitFile: (file: { type: "asset"; fileName: string; source: string }) => void }, _options: unknown, bundle: Record<string, unknown>) {
+    const publicFiles = readdirSync("public");
+    const template = readFileSync("scripts/sw-template.js", "utf8");
+    this.emitFile({ type: "asset", fileName: "sw.js", source: serviceWorkerSource(template, pkg.version, [...Object.keys(bundle), ...publicFiles]) });
+  },
+};
+
 export default defineConfig({
   // GitHub Pages serves the site at /mm-toolkit-web/; local dev and tests use /.
   base: process.env.GITHUB_PAGES === "1" ? "/mm-toolkit-web/" : "/",
-  plugins: [svelte(), cspMeta],
+  plugins: [svelte(), cspMeta, serviceWorker],
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
     __DEV_BUILD__: JSON.stringify(devBuildLabel()),

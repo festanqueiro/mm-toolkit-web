@@ -11,6 +11,7 @@
   import VideoCreator from "./tabs/video-creator/VideoCreator.svelte";
   import { historyTabLabel } from "../engine/history";
   import { historyUi } from "./history.svelte";
+  import { applyUpdate, pwa } from "./pwa.svelte";
   import { initApp } from "./state.svelte";
 
   initApp();
@@ -79,6 +80,13 @@
       <Placeholder route={current} />
     {/if}
   </main>
+
+  {#if pwa.updateReady}
+    <div class="update" role="status" data-testid="update-banner">
+      <span>A new version is available</span>
+      <button type="button" class="btn primary" onclick={applyUpdate}>Reload</button>
+    </div>
+  {/if}
 
   <footer class="site-footer">
     <span>Everything runs in your browser. No files are uploaded.</span>
@@ -217,6 +225,23 @@
     .page {
       padding: 32px 28px 24px;
     }
+  }
+  .update {
+    position: fixed;
+    left: 50%;
+    bottom: 20px;
+    z-index: 30;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    max-width: calc(100vw - 2 * var(--gutter));
+    padding: 8px 8px 8px 16px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--surface);
+    box-shadow: var(--shadow-md);
+    font-weight: 600;
   }
   .site-footer {
     display: flex;
