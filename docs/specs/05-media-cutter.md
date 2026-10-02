@@ -86,12 +86,15 @@ The job runs in `workers/cut.worker.ts` (`engine/render/clips.ts`). Every clip i
 
 ### Preview playability
 
-`<video>`/`<audio>` can't play every source in every browser (MKV/AVI generally, AIFF outside Safari, some Ogg in Safari). Fallback, in order:
+`<video>`/`<audio>` can't play every source in every browser (MKV/AVI generally, AIFF outside Safari, some Ogg in Safari). The native element is tried first; it counts as failed on an `error` event, or for video when metadata loads with no picture (`videoWidth === 0`). Then (`ui/tabs/cutter/players.svelte.ts`):
 
-1. Audio: decode to PCM, play via Web Audio, and show a **waveform** timeline in place of the native player.
-2. Video: show WebCodecs-decoded thumbnails while scrubbing, or offer a one-off "Create preview proxy" (WASM transcode to a low-res MP4).
+1. **Audio → waveform.** The media Worker streams the file once into min/max peaks (`peaks` op; nothing held whole). Playback decodes ~10 s spans around the playhead in the Worker and schedules them back to back with Web Audio. Click or drag the waveform to seek; the range input stays the accessible timeline.
+2. **Video → decoded frames.** Mediabunny `CanvasSink` draws the frame at the playhead (≤ 640 px wide) on a canvas, latest request wins. Playback follows the same chunked audio clock, with the soundtrack when it decodes.
+3. If neither works: `This browser can't preview {name}. You can still type timestamps and create clips.`
 
-Cutting still works even when preview doesn't. **Status:** only the native player ships so far. An unplayable source shows `This browser can't preview {name}. You can still type timestamps and create clips.` and disables the transport; the fallbacks above are still to do (roadmap Phase 3).
+While the fallback loads: `Preparing a preview of {name}…`. Without an audio output device (headless, muted systems) the clock falls back to wall time, as in the Video Creator's live preview. AIFF is read by byte range (header chunks + the span needed), so long AIFF mixes never load whole.
+
+Cutting still works even when preview doesn't.
 
 ## Persistence
 

@@ -11,6 +11,8 @@ export type MediaOps = {
    * (`_build_bass_envelope`), plus the snippet's actual duration (clamped to the track end).
    */
   bassEnvelope: { args: { file: Blob; range: DecodeRange; fps: number }; result: { envelope: Float64Array; duration: number } };
+  /** Waveform: min/max of the mono mix in `columns` columns (interleaved), plus the duration in seconds. */
+  peaks: { args: { file: Blob; columns: number }; result: { peaks: Float32Array; duration: number } };
   /** Same, on PCM the main thread decoded (fallback for codecs the Worker can't decode). */
   detectDropPcm: { args: { pcm: PcmAudio }; result: number };
 };

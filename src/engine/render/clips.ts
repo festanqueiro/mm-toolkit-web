@@ -29,7 +29,7 @@ import {
   type OutputFormat,
 } from "mediabunny";
 import { clipOutputFormat, clipOutputName, type ClipFormat, type ClipRequest } from "../clips";
-import { decodeAiff, encodeAiff24, type PcmAudio } from "../media/aiff";
+import { blobReader, decodeAiffBlob, encodeAiff24, readAiffLayout, type PcmAudio } from "../media/aiff";
 import { DECODE_STALL_MS } from "../media/audio-decode";
 import { parseStreamInfo, registerFlacDecoder } from "../media/flac-decoder";
 import { mediaKind } from "../media-kind";
@@ -337,17 +337,14 @@ function assertUsable(conversion: Conversion, name: string, type: "video" | "aud
   }
 }
 
-/** AIFF → AIFF: slice the decoded PCM and write 24-bit big-endian (FFmpeg `pcm_s24be`). */
+/** AIFF → AIFF: read just the clip's span and write 24-bit big-endian (FFmpeg `pcm_s24be`). */
 async function cutAiff(source: File, clip: ClipRequest, index: number): Promise<Uint8Array> {
-  let pcm;
+  let layout;
   try {
-    pcm = decodeAiff(await source.arrayBuffer());
+    layout = await readAiffLayout(blobReader(source), source.size);
   } catch (error) {
     throw new Error(`${source.name} could not be read.`, { cause: error });
   }
-  const frames = pcm.channels[0]?.length ?? 0;
-  const from = Math.round(clip.start * pcm.sampleRate);
-  if (from >= frames) throw pastEnd(index, source.name);
-  const to = Math.min(frames, Math.round((clip.start + clip.duration) * pcm.sampleRate));
-  return encodeAiff24({ sampleRate: pcm.sampleRate, channels: pcm.channels.map((c) => c.subarray(from, to)) });
+  if (Math.round(clip.start * layout.sampleRate) >= layout.frames) throw pastEnd(index, source.name);
+  return encodeAiff24(await decodeAiffBlob(source, clip));
 }

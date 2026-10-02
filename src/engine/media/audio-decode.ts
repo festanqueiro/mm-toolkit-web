@@ -7,7 +7,7 @@
 
 import { ALL_FORMATS, AudioSampleSink, BlobSource, Input } from "mediabunny";
 import { extensionOf } from "../media-kind";
-import { decodeAiff, isAiff, type PcmAudio } from "./aiff";
+import { blobReader, decodeAiffBlob, isAiff, readAiffLayout, type PcmAudio } from "./aiff";
 import { registerFlacDecoder } from "./flac-decoder";
 
 registerFlacDecoder();
@@ -44,13 +44,6 @@ export function normaliseStereo16(pcm: PcmAudio): PcmAudio {
   };
   const l = quantise(left);
   return { sampleRate: pcm.sampleRate, channels: [l, right === left ? l : quantise(right)] };
-}
-
-function slice(pcm: PcmAudio, range?: DecodeRange): PcmAudio {
-  if (!range) return pcm;
-  const from = Math.max(0, Math.round(range.start * pcm.sampleRate));
-  const to = Math.max(from, Math.round((range.start + range.duration) * pcm.sampleRate));
-  return { sampleRate: pcm.sampleRate, channels: pcm.channels.map((c) => c.slice(from, to)) };
 }
 
 /**
@@ -131,7 +124,7 @@ export async function decodeAudio(blob: Blob, range?: DecodeRange): Promise<PcmA
   const ext = extensionOf(name);
   if (ext === ".aif" || ext === ".aiff" || (!ext && isAiff(await blob.slice(0, 12).arrayBuffer()))) {
     try {
-      pcm = slice(decodeAiff(await blob.arrayBuffer()), range);
+      pcm = await decodeAiffBlob(blob, range);
     } catch (error) {
       throw new AudioDecodeError((error as Error).message || "could not be read", "unreadable");
     }
@@ -140,4 +133,69 @@ export async function decodeAudio(blob: Blob, range?: DecodeRange): Promise<PcmA
   }
   if (!pcm.channels[0]?.length) throw new AudioDecodeError("contains no usable audio", "empty");
   return normaliseStereo16(pcm);
+}
+
+const isAiffBlob = async (blob: Blob) => {
+  const ext = extensionOf((blob as File).name ?? "");
+  return ext === ".aif" || ext === ".aiff" || (!ext && isAiff(await blob.slice(0, 12).arrayBuffer()));
+};
+
+/**
+ * Walk a file's audio in order without holding it all: `onChunk(channels, offset)` gets planar
+ * native-rate PCM starting at absolute frame `offset`. Returns the format, with `frames`
+ * estimated up front (for progress-like uses such as waveform columns).
+ */
+export async function streamAudio(
+  blob: Blob,
+  onStart: (info: { sampleRate: number; frames: number }) => void,
+  onChunk: (channels: Float32Array[], offset: number) => void,
+): Promise<void> {
+  if (await isAiffBlob(blob)) {
+    let layout;
+    try {
+      layout = await readAiffLayout(blobReader(blob), blob.size);
+    } catch (error) {
+      throw new AudioDecodeError((error as Error).message || "could not be read", "unreadable");
+    }
+    onStart({ sampleRate: layout.sampleRate, frames: layout.frames });
+    const step = Math.round(layout.sampleRate * 10);
+    for (let at = 0; at < layout.frames; at += step) {
+      const pcm = await decodeAiffBlob(blob, { start: at / layout.sampleRate, duration: step / layout.sampleRate });
+      onChunk(pcm.channels, at);
+    }
+    return;
+  }
+  const input = new Input({ source: new BlobSource(blob), formats: ALL_FORMATS });
+  try {
+    let track;
+    try {
+      track = await input.getPrimaryAudioTrack();
+    } catch {
+      throw new AudioDecodeError("could not be read", "unreadable");
+    }
+    if (!track) throw new AudioDecodeError("contains no usable audio", "empty");
+    const unsupported = () => new AudioDecodeError(`uses a codec (${track.codec ?? "unknown"}) this browser can't decode`, "unsupported");
+    if (!(await track.canDecode())) throw unsupported();
+    const sampleRate = track.sampleRate;
+    onStart({ sampleRate, frames: Math.round((await input.computeDuration()) * sampleRate) });
+    const samples = new AudioSampleSink(track).samples();
+    for (;;) {
+      const next = await nextWithin(samples, DECODE_STALL_MS);
+      if (!next) {
+        void samples.return(undefined).catch(() => {});
+        throw unsupported();
+      }
+      if (next.done) break;
+      const sample = next.value;
+      const planes = Array.from({ length: sample.numberOfChannels }, (_, c) => {
+        const plane = new Float32Array(sample.numberOfFrames);
+        sample.copyTo(plane, { planeIndex: c, format: "f32-planar" });
+        return plane;
+      });
+      onChunk(planes, Math.max(0, Math.round(sample.timestamp * sampleRate)));
+      sample.close();
+    }
+  } finally {
+    input.dispose();
+  }
 }

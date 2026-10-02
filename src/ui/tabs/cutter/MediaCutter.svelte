@@ -24,6 +24,8 @@
   import { routes } from "../../routes";
   import { app } from "../../state.svelte";
   import ClipTable from "./ClipTable.svelte";
+  import { FramePlayer, NativePlayer, WaveformPlayer, type PreviewPlayer } from "./players.svelte";
+  import Waveform from "./Waveform.svelte";
   import { cutter } from "./state.svelte";
 
   $effect(() => {
@@ -58,35 +60,67 @@
     if (file) await cutter.setSource(file);
   }
 
-  // ---- Player (native <video>/<audio>) ----
+  // ---- Player: native element first, then the decoded fallbacks (spec 05) ----
   let media = $state<HTMLMediaElement | null>(null);
-  let position = $state(0);
-  let duration = $state(0);
-  let playing = $state(false);
-  /** False when this browser can't play the source natively (cutting still works). */
-  let playable = $state(true);
+  let frameCanvas = $state<HTMLCanvasElement | null>(null);
+  let player = $state<PreviewPlayer | null>(null);
+  /** The native element failed; a fallback is loading, ready, or unavailable. */
+  let fallback = $state<"none" | "loading" | "ready" | "unavailable">("none");
   /** The clip being previewed and where it stops. */
   let clipPreview = $state<{ key: string; end: number } | null>(null);
   let clipError = $state<string | null>(null);
   let frame = 0;
+  let token = 0;
 
-  const ready = $derived(sourceOk && playable && duration > 0);
+  const position = $derived(player?.position ?? 0);
+  const duration = $derived(player?.duration ?? 0);
+  const playing = $derived(player?.playing ?? false);
+  const ready = $derived(sourceOk && !!player && duration > 0);
 
   // A new source resets the player.
   $effect(() => {
     void cutter.source?.url;
     untrack(() => {
-      position = 0;
-      duration = 0;
-      playing = false;
-      playable = true;
+      token++;
       stopClip();
+      player?.destroy();
+      player = null;
+      fallback = "none";
     });
   });
 
+  // The native element, once rendered.
+  $effect(() => {
+    if (media && fallback === "none") untrack(() => (player = new NativePlayer(media!)));
+  });
+
+  // The frame player draws into its canvas once both exist.
+  $effect(() => {
+    if (frameCanvas && player instanceof FramePlayer) player.attach(frameCanvas);
+  });
+
+  /** The element can't play this source: decode it here instead. */
+  async function useFallback() {
+    const source = cutter.source;
+    if (!source?.ok || fallback !== "none") return;
+    const mine = ++token;
+    stopClip();
+    player?.destroy();
+    player = null;
+    fallback = "loading";
+    try {
+      const next = kind === "video" ? await FramePlayer.open(source.file) : await WaveformPlayer.open(source.file);
+      if (mine !== token) return next.destroy();
+      player = next;
+      fallback = "ready";
+    } catch {
+      if (mine === token) fallback = "unavailable";
+    }
+  }
+
   function stopClip() {
     cancelAnimationFrame(frame);
-    if (clipPreview) media?.pause();
+    if (clipPreview) player?.pause();
     clipPreview = null;
   }
 
@@ -94,9 +128,9 @@
   function watchClip() {
     cancelAnimationFrame(frame);
     const tick = () => {
-      if (!clipPreview || !media) return;
-      if (media.currentTime >= clipPreview.end || media.ended) {
-        media.pause();
+      if (!clipPreview || !player) return;
+      if (player.now() >= clipPreview.end || !player.playing) {
+        player.pause();
         clipPreview = null;
         return;
       }
@@ -106,16 +140,15 @@
   }
 
   async function togglePlay() {
-    if (!media) return;
+    if (!player) return;
     stopClip();
-    if (media.paused) await media.play().catch(() => {});
-    else media.pause();
+    if (player.playing) player.pause();
+    else await player.play();
   }
 
   function seek(value: number) {
     stopClip();
-    if (media) media.currentTime = value;
-    position = value;
+    player?.seek(value);
   }
 
   async function previewClip(key: string) {
@@ -126,7 +159,7 @@
     }
     const index = cutter.rows.findIndex((r) => r.key === key);
     const row = cutter.rows[index];
-    if (!row || !media) return;
+    if (!row || !player) return;
     const result = clipRequest(row);
     if ("error" in result) {
       clipError = `Clip ${index + 1}: ${result.error}`;
@@ -134,10 +167,11 @@
     }
     stopClip();
     cutter.currentKey = key;
-    media.currentTime = result.clip.start;
+    player.seek(result.clip.start);
     clipPreview = { key, end: result.clip.start + result.clip.duration };
-    await media.play().catch(() => (clipPreview = null));
-    watchClip();
+    await player.play();
+    if (!player.playing) clipPreview = null;
+    else watchClip();
   }
 
   function onEdit(key: string) {
@@ -145,13 +179,16 @@
     if (clipPreview?.key === key) stopClip();
   }
 
-  $effect(() => () => cancelAnimationFrame(frame));
+  $effect(() => () => {
+    cancelAnimationFrame(frame);
+    player?.destroy();
+  });
   $effect(() => {
     // Stop playback while a job runs.
     if (cutter.running)
       untrack(() => {
         stopClip();
-        media?.pause();
+        player?.pause();
       });
   });
 </script>
@@ -177,37 +214,37 @@
       </DropZone>
 
       {#if cutter.source && sourceOk}
-        {#key cutter.source.url}
-          {#if kind === "video"}
-            <div class="screen">
-              <!-- svelte-ignore a11y_media_has_caption -->
-              <video
-                bind:this={media}
-                src={cutter.source.url}
-                preload="auto"
-                playsinline
-                onloadedmetadata={(e) => (duration = e.currentTarget.duration)}
-                onloadeddata={(e) => (e.currentTarget.currentTime = 0)}
-                ontimeupdate={(e) => (position = e.currentTarget.currentTime)}
-                onplay={() => (playing = true)}
-                onpause={() => (playing = false)}
-                onerror={() => (playable = false)}
-              ></video>
-            </div>
-          {:else}
-            <audio
-              bind:this={media}
-              src={cutter.source.url}
-              preload="auto"
-              onloadedmetadata={(e) => (duration = e.currentTarget.duration)}
-              ontimeupdate={(e) => (position = e.currentTarget.currentTime)}
-              onplay={() => (playing = true)}
-              onpause={() => (playing = false)}
-              onerror={() => (playable = false)}
-            ></audio>
-          {/if}
-        {/key}
-        {#if !playable}
+        <div class="player" data-testid="player" data-mode={player?.mode ?? ""}>
+          {#key cutter.source.url}
+            {#if fallback === "none"}
+              {#if kind === "video"}
+                <div class="screen">
+                  <!-- svelte-ignore a11y_media_has_caption -->
+                  <video
+                    bind:this={media}
+                    src={cutter.source.url}
+                    preload="auto"
+                    playsinline
+                    onloadedmetadata={(e) => e.currentTarget.videoWidth === 0 && useFallback()}
+                    onloadeddata={(e) => (e.currentTarget.currentTime = 0)}
+                    onerror={useFallback}
+                  ></video>
+                </div>
+              {:else}
+                <audio bind:this={media} src={cutter.source.url} preload="auto" onerror={useFallback}></audio>
+              {/if}
+            {:else if fallback === "ready" && player instanceof FramePlayer}
+              <div class="screen">
+                <canvas bind:this={frameCanvas} class="frames" aria-label="Video preview of {cutter.source.file.name}"></canvas>
+              </div>
+            {:else if fallback === "ready" && player instanceof WaveformPlayer && player.peaks}
+              <Waveform peaks={player.peaks} {duration} {position} onseek={seek} />
+            {/if}
+          {/key}
+        </div>
+        {#if fallback === "loading"}
+          <p class="status" data-testid="preview-status">Preparing a preview of {cutter.source.file.name}…</p>
+        {:else if fallback === "unavailable"}
           <p class="status warn" data-testid="preview-status">This browser can't preview {cutter.source.file.name}. You can still type timestamps and create clips.</p>
         {/if}
 
@@ -231,8 +268,8 @@
             {playing ? "Pause" : "Play"}
           </button>
           <span class="editing" data-testid="editing">{editing}</span>
-          <button type="button" class="btn" disabled={!ready || cutter.running} onclick={() => cutter.setFromPlayer("start", media?.currentTime ?? 0)}>Set Start</button>
-          <button type="button" class="btn" disabled={!ready || cutter.running} onclick={() => cutter.setFromPlayer("end", media?.currentTime ?? 0)}>Set End</button>
+          <button type="button" class="btn" disabled={!ready || cutter.running} onclick={() => cutter.setFromPlayer("start", player?.now() ?? 0)}>Set Start</button>
+          <button type="button" class="btn" disabled={!ready || cutter.running} onclick={() => cutter.setFromPlayer("end", player?.now() ?? 0)}>Set End</button>
         </div>
       {/if}
     </Section>
@@ -326,6 +363,12 @@
       order: -1;
       flex-basis: 100%;
     }
+  }
+  .frames {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
   }
   video {
     display: block;
