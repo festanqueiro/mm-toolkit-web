@@ -6,6 +6,11 @@ export type MediaOps = {
   decode: { args: { file: Blob; range?: DecodeRange }; result: PcmAudio };
   /** `detect_drop_time` on the whole track; seconds. */
   detectDrop: { args: { file: Blob }; result: number };
+  /**
+   * Bass envelope of the snippet `[range.start, range.start + range.duration)` at `fps`
+   * (`_build_bass_envelope`), plus the snippet's actual duration (clamped to the track end).
+   */
+  bassEnvelope: { args: { file: Blob; range: DecodeRange; fps: number }; result: { envelope: Float64Array; duration: number } };
   /** Same, on PCM the main thread decoded (fallback for codecs the Worker can't decode). */
   detectDropPcm: { args: { pcm: PcmAudio }; result: number };
 };

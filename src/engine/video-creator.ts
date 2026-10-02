@@ -156,3 +156,68 @@ export const dropFailedStatus = (message: string) => `Drop detection failed: ${m
 
 /** Proposed start for a detected drop: `max(0, drop − leadIn)`, shown via `formatTimestamp`. */
 export const proposedStart = (drop: number, leadIn: number) => Math.max(0, drop - leadIn);
+
+// ------------------------------------------------------------------ Output (spec 04)
+
+export type Size = [number, number];
+
+/** Video profile choices; `null` = the visual's native size. */
+export const PROFILES: readonly { label: string; size: Size | null }[] = [
+  { label: "Visual native", size: null },
+  { label: "Vertical 1080 × 1920", size: [1080, 1920] },
+  { label: "Square 1080 × 1080", size: [1080, 1080] },
+  { label: "Landscape 1920 × 1080", size: [1920, 1080] },
+];
+
+export type Quality = "maximum" | "high" | "standard" | "small";
+
+/**
+ * Quality presets replace desktop CRF + encoding speed (documented deviation). Bits per
+ * pixel per frame; High was raised to 0.14 after the Phase 0 side-by-side with CRF 18.
+ */
+export const QUALITIES: readonly { value: Quality; label: string; bpp: number }[] = [
+  { value: "maximum", label: "Maximum", bpp: 0.2 },
+  { value: "high", label: "High", bpp: 0.14 },
+  { value: "standard", label: "Standard", bpp: 0.07 },
+  { value: "small", label: "Small", bpp: 0.04 },
+];
+
+export const AUDIO_BITRATES = ["128k", "192k", "256k", "320k"] as const;
+export type AudioBitrate = (typeof AUDIO_BITRATES)[number];
+
+export const OUTPUT_DEFAULTS = { profile: 0, fps: 24, quality: "high" as Quality, audioBitrate: "320k" as AudioBitrate };
+export const MIN_FPS = 12;
+export const MAX_FPS = 60;
+
+/** Output canvas: the profile size, or the visual's size rounded down to even (H.264 4:2:0). */
+export function canvasSize(profile: Size | null, visual: Size): Size {
+  return profile ?? [visual[0] - (visual[0] % 2), visual[1] - (visual[1] % 2)];
+}
+
+/** Live-preview canvas: the output canvas scaled so its longest edge is at most `maxEdge`. */
+export function previewSize(canvas: Size, maxEdge = 540): Size {
+  const scale = Math.min(1, maxEdge / Math.max(canvas[0], canvas[1]));
+  return [Math.max(2, Math.round(canvas[0] * scale)), Math.max(2, Math.round(canvas[1] * scale))];
+}
+
+export const videoBitrate = (size: Size, fps: number, quality: Quality) =>
+  Math.round(size[0] * size[1] * fps * (QUALITIES.find((q) => q.value === quality) ?? QUALITIES[1]!).bpp);
+
+export const OUTPUT_STATUS = {
+  writable: "✓ Export folder is writable.",
+  notWritable: "Export folder is not writable.",
+  downloads: "Videos are saved to your browser's Downloads folder.",
+} as const;
+
+export const reallowFolder = (name: string) => `Click to re-allow access to "${name}".`;
+
+/** `#rrggbb` label for the background colour swatch. */
+export const hexColor = ([r, g, b]: readonly [number, number, number]) =>
+  `#${[r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("")}`;
+
+export function parseHexColor(hex: string): [number, number, number] | null {
+  const match = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!match) return null;
+  const n = parseInt(match[1]!, 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}

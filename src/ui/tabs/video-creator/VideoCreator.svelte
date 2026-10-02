@@ -3,9 +3,7 @@
   import {
     audioStatus,
     dropDialogMessage,
-    durationSummary,
     generateLabel,
-    jobSummary,
     requirements,
     trackOptions,
   } from "../../../engine/video-creator";
@@ -15,8 +13,16 @@
   import PageHeader from "../../components/PageHeader.svelte";
   import { routes } from "../../routes";
   import { app } from "../../state.svelte";
+  import EffectsList from "./EffectsList.svelte";
+  import Layers from "./Layers.svelte";
+  import LivePreview from "./LivePreview.svelte";
+  import Output from "./Output.svelte";
   import { vc } from "./state.svelte";
   import TrackTable from "./TrackTable.svelte";
+
+  $effect(() => {
+    if (app.settingsLoaded) vc.restore();
+  });
 
   const subtitle = routes.find((r) => r.path === "video-creator")!.subtitle;
 
@@ -35,8 +41,10 @@
   const musicOk = $derived(vc.trackCount > 0);
   const visualOk = $derived(vc.visual?.ok === true);
   const downstreamReady = $derived(musicOk && visualOk && !vc.running);
-  /** Tier 2 exports through Downloads (always available); Tier 1 needs a folder (Output section, next update). */
-  const outputOk = $derived(!app.capabilities?.directoryPicker || !!app.settings["general/default_output"]);
+  /** Tier 2 exports through Downloads (always available); Tier 1 needs a folder with write permission. */
+  const outputOk = $derived(!app.capabilities?.directoryPicker || (vc.output !== null && vc.outputPermission === "granted"));
+  const isVideo = $derived(vc.visual?.ok === true && vc.visual.kind === "video");
+  let previewOpen = $state(true);
   const req = $derived(
     requirements({
       trackCount: vc.trackCount,
@@ -173,23 +181,43 @@
   </div>
 
   <div class="column">
-    {#each [["effects", "Visual Effects"], ["layers", "Layers"], ["post", "Post-Effects"]] as const as [key, title] (key)}
-      <Accordion {title} open={rightOpen === key} ontoggle={() => toggleRight(key)} disabled={!downstreamReady}>
-        <p class="status">Arrives with rendering in the next update.</p>
-      </Accordion>
-    {/each}
-    <Accordion title="Output" open={rightOpen === "output"} ontoggle={() => toggleRight("output")} disabled={!downstreamReady}>
+    <section class="card" aria-label="Preview">
+      <h2>
+        <button type="button" class="card-toggle" aria-expanded={previewOpen} onclick={() => (previewOpen = !previewOpen)}>
+          <span class="chevron" aria-hidden="true">{previewOpen ? "▾" : "▸"}</span>
+          Preview
+        </button>
+      </h2>
+      {#if previewOpen}
+        <div class="card-body"><LivePreview /></div>
+      {/if}
+    </section>
+    <Accordion title="Visual Effects" open={rightOpen === "effects"} ontoggle={() => toggleRight("effects")} disabled={!downstreamReady}>
+      <EffectsList disabled={!downstreamReady} />
+    </Accordion>
+    <Accordion title="Layers" open={rightOpen === "layers"} ontoggle={() => toggleRight("layers")} disabled={!downstreamReady}>
+      <Layers disabled={!downstreamReady} />
+    </Accordion>
+    <Accordion title="Post-Effects" open={rightOpen === "post"} ontoggle={() => toggleRight("post")} disabled={!downstreamReady}>
       <div class="form">
-        <span class="label">Estimated duration</span>
-        <p class="value" data-testid="duration-summary">{durationSummary(tracks.options)}</p>
-        <span class="label">Job estimate</span>
-        <p class="value" data-testid="job-summary">{jobSummary(tracks.options.length)}</p>
+        {#if isVideo}
+          <span class="label">Video sound</span>
+          <label class="check"><input type="checkbox" bind:checked={vc.muteOriginal} /> Mute original video sound</label>
+        {/if}
+        <span class="label">Video</span>
+        <label class="check"><input type="checkbox" bind:checked={vc.videoFade} /> Fade video in/out</label>
+        <span class="label">Audio</span>
+        <label class="check"><input type="checkbox" bind:checked={vc.audioFade} /> Fade audio in/out</label>
       </div>
+    </Accordion>
+    <Accordion title="Output" open={rightOpen === "output"} ontoggle={() => toggleRight("output")} disabled={!downstreamReady}>
+      <Output disabled={!downstreamReady} tracks={tracks.options} />
     </Accordion>
   </div>
 </div>
 
 <footer class="footer">
+  <button type="button" class="btn" disabled={vc.running} onclick={() => vc.clear()}>Clear</button>
   <p class="requirements" class:ok={req.ready} data-testid="requirements">{req.message}</p>
   <button type="button" class="btn primary generate" disabled title="Video rendering arrives in the next update.">
     {generateLabel(vc.trackCount)}
@@ -290,10 +318,6 @@
     max-width: 94px;
     max-height: 94px;
   }
-  .value {
-    margin: 0;
-    padding-top: 7px;
-  }
   .footer {
     position: sticky;
     bottom: 0;
@@ -315,6 +339,42 @@
   }
   .generate {
     min-height: 44px;
+  }
+  .card {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+  }
+  .card h2 {
+    margin: 0;
+    font-size: 1rem;
+  }
+  .card-toggle {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    border: 0;
+    background: none;
+    color: var(--text);
+    font: inherit;
+    font-weight: 700;
+    text-align: left;
+    cursor: pointer;
+  }
+  .chevron {
+    width: 1em;
+    color: var(--text-muted);
+  }
+  .card-body {
+    padding: 0 16px 16px;
+  }
+  .check {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding-top: 7px;
   }
   .lead-in {
     display: grid;

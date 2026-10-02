@@ -69,7 +69,8 @@ export default defineConfig({
           browser: {
             enabled: true,
             headless: true,
-            provider: playwright(),
+            // CI's Firefox sometimes blocklists Mesa's software GL at startup; skip that check.
+            provider: playwright({ launchOptions: { firefoxUserPrefs: { "webgl.force-enabled": true } } }),
             screenshotFailures: false,
             instances: [{ browser: "chromium" }, { browser: "webkit" }, { browser: "firefox" }],
           },
