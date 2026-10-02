@@ -141,6 +141,7 @@ Port of `render_track`. Runs in the job Worker.
 ### Implementation notes (render)
 
 - `engine/render/promo.ts` runs in `workers/render.worker.ts`. Still visuals use the Pillow-exact CPU fit once per track. Video visuals are fitted per frame with the 2D scaler (visual-only parity) and read through `canvasesAtTimestamps` with all frame times known up front.
+- **No WebGL in Workers** (WebKitGTK, older Safari): the render falls back to the CPU reference effects. They're bit-exact, but much slower, and a warning is shown.
 - **Frames**: `ceil(duration × fps)` (moviepy's `np.arange(0, duration, 1/fps)`).
 - **Audio** is resampled to **44.1 kHz** like moviepy's `audio_fps` (windowed sinc), then encoded as AAC. Without an AAC encoder (Firefox) it's Opus at 48 kHz, with a warning.
   - The original video sound (when not muted) is looped, summed with the faded music and clipped.

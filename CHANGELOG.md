@@ -16,6 +16,10 @@ policy in `CLAUDE.md` (patch by default, minor/major only when requested).
   - Progress, Cancel ("Cancelling safely…" → "Cancelled. Partial files were removed."), and the "Generation failed" dialog with details.
 - Successful jobs are recorded in History (newest 20) and send the "Promo video finished" notification when enabled. Leaving the page during a job asks first, and the screen stays awake.
 - Windowed-sinc resampler (output audio at 44.1 kHz, as on desktop) and `AudioLoop` port.
+- Browsers without WebGL in Workers (WebKitGTK, older Safari) render with the bit-exact CPU effects instead, with a warning.
+
+### Fixed
+- Settings could overwrite a template typed before stored settings finished loading.
 
 ## [0.1.7] - 2026-10-02
 

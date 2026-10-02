@@ -21,10 +21,10 @@ import {
 } from "mediabunny";
 import { buildBassEnvelope, envelopeAt, toMono } from "../analysis/drop";
 import { loopTo, PROMO_AUDIO_RATE, resample } from "../audio/resample";
-import { buildBackgroundFrame, fitOverlayFrame, fitVisualFrame } from "../effects/cpu/effects";
+import { applyEffectChain, applyVideoFade, buildBackgroundFrame, dropAlpha, fitOverlayFrame, fitVisualFrame } from "../effects/cpu/effects";
 import type { Image8 } from "../effects/cpu/image";
 import { applyAudioFade, fadeLength, videoFadeGain } from "../effects/fade";
-import { GlEffectRenderer } from "../effects/gl/renderer";
+import { GlEffectRenderer, WebGLUnavailableError, type FrameOptions } from "../effects/gl/renderer";
 import type { EffectSettings } from "../effects/settings";
 import { AudioDecodeError, decodeAudio } from "../media/audio-decode";
 import { safeFilename, type ConflictPolicy } from "../naming";
@@ -164,7 +164,7 @@ async function renderTrack(
   const bg = job.effects.background;
   const background = buildBackgroundFrame(size[0], size[1], bg.color, bg.mode === "image" ? job.backgroundImage : null);
   const overlay = job.effects.overlay.enabled && job.overlayImage ? fitOverlayFrame(rgba(job.overlayImage), size[0], size[1]) : null;
-  const stillFrame = job.visual.image ? rgba(fitVisualFrame(job.visual.image, job.profile, background)) : null;
+  const stillFrame = job.visual.image ? fitVisualFrame(job.visual.image, job.profile, background) : null;
 
   // 7. Audio: music (faded) + optionally the looped original video sound; resampled like moviepy.
   const bitrate = videoBitrate(size, job.fps, job.quality);
@@ -184,10 +184,8 @@ async function renderTrack(
 
   // 8. Encoders + muxer.
   const videoCodec = await pickVideoCodec(size, bitrate, cb.warn);
-  const canvas = new OffscreenCanvas(size[0], size[1]);
-  const renderer = new GlEffectRenderer(canvas, size[0], size[1]);
-  renderer.setBackground(background);
-  renderer.setOverlay(overlay);
+  const renderer = createFrameRenderer(size, background, overlay, cb.warn);
+  const canvas = renderer.canvas;
   const output = new Output({ format: new Mp4OutputFormat({ fastStart: "in-memory" }), target: new BufferTarget() });
   const videoSource = new CanvasSource(canvas, {
     codec: videoCodec,
@@ -296,5 +294,52 @@ async function openVideoFrames(file: File, size: Size, profile: Size | null, bac
       void frames.return(undefined);
       input.dispose();
     },
+  };
+}
+
+type FrameRenderer = {
+  canvas: OffscreenCanvas;
+  render: (frame: Image8 | OffscreenCanvas, options: FrameOptions) => void;
+  dispose: () => void;
+};
+
+/**
+ * WebGL2 on an OffscreenCanvas when the Worker has it; otherwise the bit-exact CPU reference
+ * (much slower). WebKitGTK and older Safari lack WebGL in Workers.
+ */
+function createFrameRenderer(size: Size, background: Image8, overlay: Image8 | null, warn: PromoCallbacks["warn"]): FrameRenderer {
+  const [w, h] = size;
+  try {
+    const canvas = new OffscreenCanvas(w, h);
+    const gl = new GlEffectRenderer(canvas, w, h);
+    gl.setBackground(background);
+    gl.setOverlay(overlay);
+    return { canvas, render: (frame, options) => gl.render(frame, options), dispose: () => gl.dispose() };
+  } catch (error) {
+    if (!(error instanceof WebGLUnavailableError)) throw error;
+  }
+  warn("GPU effects aren't available in this browser's background workers, so rendering uses the CPU (slower).");
+  const canvas = new OffscreenCanvas(w, h);
+  const ctx = canvas.getContext("2d")!;
+  const out = new ImageData(w, h);
+  const readCanvas = (source: OffscreenCanvas): Image8 => {
+    const rgba = source.getContext("2d")!.getImageData(0, 0, w, h).data;
+    return dropAlpha({ width: w, height: h, channels: 4, data: new Uint8Array(rgba.buffer) });
+  };
+  return {
+    canvas,
+    render(frame, options) {
+      const rgb = frame instanceof OffscreenCanvas ? readCanvas(frame) : frame.channels === 3 ? frame : dropAlpha(frame);
+      let result = applyEffectChain(rgb, options.time, options.settings, background, options.bassStrength, overlay);
+      result = applyVideoFade(result, options.fadeGain ?? 1);
+      for (let p = 0; p < w * h; p++) {
+        out.data[p * 4] = result.data[p * 3]!;
+        out.data[p * 4 + 1] = result.data[p * 3 + 1]!;
+        out.data[p * 4 + 2] = result.data[p * 3 + 2]!;
+        out.data[p * 4 + 3] = 255;
+      }
+      ctx.putImageData(out, 0, 0);
+    },
+    dispose() {},
   };
 }

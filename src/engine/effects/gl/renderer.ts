@@ -46,6 +46,8 @@ export class GlEffectRenderer {
   private readonly tapsX: WebGLTexture;
   private readonly tapsY: WebGLTexture;
   private hasBackground = false;
+  /** The last Image8 uploaded as the frame; a still visual is uploaded once, not per frame. */
+  private lastFrame: Image8 | null = null;
   private hasOverlay = false;
   private result: Target;
 
@@ -104,7 +106,9 @@ export class GlEffectRenderer {
   render(source: FrameSource, options: FrameOptions): void {
     const gl = this.gl;
     const { time, settings } = options;
-    this.upload(this.frame.texture, source);
+    const isImage = "data" in source && (source as Image8).data instanceof Uint8Array;
+    if (!isImage || source !== this.lastFrame) this.upload(this.frame.texture, source);
+    this.lastFrame = isImage ? (source as Image8) : null;
     let current = this.frame;
     const next = () => (current === this.ping[0] ? this.ping[1] : this.ping[0]);
     const apply = (pass: Pass, set: (uniform: (name: string) => WebGLUniformLocation | null) => void, extra: WebGLTexture[] = []) => {
