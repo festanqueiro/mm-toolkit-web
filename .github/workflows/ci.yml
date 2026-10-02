@@ -52,12 +52,13 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps ${{ matrix.browser }}
       # Linux runners have no GPU. Chromium and WebKit fall back to software GL by
-      # themselves; Firefox needs Mesa (llvmpipe) plus an X display (Xvfb).
+      # themselves; Firefox needs Mesa (llvmpipe) plus an X display (Xvfb) for WebGL.
       - if: matrix.browser == 'firefox'
         run: sudo apt-get install -y --no-install-recommends libegl1 libgl1 libgl1-mesa-dri libglx-mesa0 libegl-mesa0 xvfb
       - name: WebGL parity (Vitest browser mode)
         run: xvfb-run -a npx vitest run --project "gl (${{ matrix.browser }})"
-      - run: npx playwright test --project=${{ matrix.browser }}
+      # Xvfb here too: the Video Creator live preview needs WebGL2.
+      - run: xvfb-run -a npx playwright test --project=${{ matrix.browser }}
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
