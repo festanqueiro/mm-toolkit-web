@@ -1,10 +1,16 @@
 <script lang="ts">
   /** The job's failure, inline in the rail (replaces the failure dialog). */
   let { title, failure, ondismiss }: { title: string; failure: { message: string; details: string } | null; ondismiss: () => void } = $props();
+
+  // On narrow screens the card sits below the setup: bring it into view when it appears.
+  let card = $state<HTMLElement>();
+  $effect(() => {
+    card?.scrollIntoView({ block: "center" });
+  });
 </script>
 
 {#if failure}
-  <div class="rail-error" role="alert" data-testid="job-error">
+  <div class="rail-error" role="alert" data-testid="job-error" bind:this={card}>
     <p class="title">{title}</p>
     <p class="message">{failure.message}</p>
     {#if failure.details}

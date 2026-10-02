@@ -72,6 +72,11 @@ test("cancel stops the job and leaves no partial file", async ({ page, browserNa
   await page.getByLabel("Video profile").selectOption({ label: "Landscape 1920 × 1080" });
   await page.getByRole("button", { name: "Generate Video" }).click();
   await expect(page.getByTestId("progress-status")).toHaveText(/Rendering drop-30s-stereo\.wav/, { timeout: 60_000 });
+  // Inputs are locked while the job runs (a changed source would mismatch the job's History record).
+  await expect(page.getByRole("region", { name: "Audio" }).getByRole("button", { name: "Choose Folder…" })).toBeDisabled();
+  await expect(page.getByRole("region", { name: "Image or video" }).getByRole("button", { name: "Choose…", exact: true })).toBeDisabled();
+  await expect(page.getByLabel("Start for track 1")).toBeDisabled();
+  await expect(page.getByLabel("Duration for track 1 in seconds")).toBeDisabled();
   await page.getByRole("button", { name: "Cancel" }).click();
   await expect(page.getByTestId("progress-status")).toHaveText("Cancelled. Partial files were removed.", { timeout: 60_000 });
   await expect(page.getByRole("button", { name: "Cancel" })).toHaveCount(0);

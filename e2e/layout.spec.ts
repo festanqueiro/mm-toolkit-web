@@ -3,6 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { mockFolderPicker } from "./helpers";
 
 const golden = (name: string) => fileURLToPath(new URL(`../fixtures/golden/${name}`, import.meta.url));
+const media = (name: string) => fileURLToPath(new URL(`../fixtures/media/${name}`, import.meta.url));
 
 async function convertOne(page: Page, browserName: string, format = "wav") {
   const chooser = page.waitForEvent("filechooser");
@@ -86,6 +87,26 @@ test("the rail is roomy and never scrolls sideways", async ({ page }) => {
   expect(style[1]).toBe("stable");
 });
 
+test("results list outputs that share a name", async ({ page, browserName }) => {
+  test.skip(browserName !== "chromium", "Conflict policies apply to folder exports (Tier 1).");
+  await mockFolderPicker(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/#/settings");
+  await page.getByLabel("Existing files").selectOption("overwrite");
+  await page.goto("/#/converter");
+  const chooser = page.waitForEvent("filechooser");
+  await page.getByRole("button", { name: "Choose Audio or Video Files…" }).click();
+  await (await chooser).setFiles([golden("audio/short-10s-mono.wav"), media("short-10s-mono.aiff")]);
+  await page.getByLabel("Convert to").selectOption("mp3");
+  await page.getByRole("region", { name: "Export" }).getByRole("button", { name: "Choose…" }).click();
+  await page.getByRole("button", { name: "Convert Files" }).click();
+  await expect(page.getByTestId("progress-status")).toHaveText("Finished 2 conversions", { timeout: 60_000 });
+  const results = page.getByRole("complementary", { name: "Output" }).getByRole("list", { name: "Results" });
+  // Both runs wrote the same file; the list shows it once rather than breaking.
+  await expect(results.getByRole("button", { name: "Download" })).toHaveCount(1);
+  await expect(results).toContainText("short-10s-mono.mp3");
+});
+
 test("narrow screens: one column, the action in a bottom bar, no overflow", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 800 });
   await page.goto("/#/converter");
@@ -93,6 +114,21 @@ test("narrow screens: one column, the action in a bottom bar, no overflow", asyn
   await expect(page.getByRole("button", { name: "Convert Files" })).toHaveCount(1);
   await expect(page.getByTestId("requirements")).toHaveCount(1);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+});
+
+test("narrow screens: a failure is brought into view", async ({ page, browserName }) => {
+  // Blocking the worker's script only fails the job in WebKit; the scroll itself isn't engine-specific.
+  test.skip(browserName !== "webkit", "Needs a job failure, which only WebKit gives for a blocked worker script.");
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.goto("/#/converter");
+  const chooser = page.waitForEvent("filechooser");
+  await page.getByRole("button", { name: "Choose Audio or Video Files…" }).click();
+  await (await chooser).setFiles(golden("audio/short-10s-mono.wav"));
+  // A worker that can't load fails the job.
+  await page.route(/job[-.]host|job\.worker/, (route) => route.abort());
+  await page.getByTestId("action-bar").getByRole("button", { name: "Convert Files" }).click();
+  await expect(page.getByTestId("job-error")).toContainText("Conversion failed", { timeout: 30_000 });
+  await expect(page.getByTestId("job-error")).toBeInViewport();
 });
 
 test("the Cutter's rail lists every clip with a player", async ({ page, browserName }) => {

@@ -36,6 +36,7 @@
                 class="input"
                 aria-label="Start for track {index + 1}"
                 placeholder="HH:MM:SS"
+                disabled={vc.running}
                 value={row.start}
                 oninput={(e) => vc.updateRow(row.key, { start: e.currentTarget.value })}
               />
@@ -58,6 +59,7 @@
                 max={MAX_TRACK_DURATION}
                 step="0.1"
                 aria-label="Duration for track {index + 1} in seconds"
+                disabled={vc.running}
                 value={row.duration}
                 onchange={(e) => commitDuration(row.key, e.currentTarget)}
               />

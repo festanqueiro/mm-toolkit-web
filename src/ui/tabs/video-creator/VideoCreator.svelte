@@ -137,8 +137,8 @@
           <span class="zone-hint" class:reselect={vc.pendingAudio} data-testid="audio-hint">{vc.pendingAudio ? reselectHint([vc.pendingAudio]) : "Drop an audio file or a folder here"}</span>
         {/if}
         {#snippet actions()}
-          <button type="button" class="btn" onclick={chooseAudioFile}>Choose File…</button>
-          <button type="button" class="btn" onclick={chooseAudioFolder}>Choose Folder…</button>
+          <button type="button" class="btn" disabled={vc.running} onclick={chooseAudioFile}>Choose File…</button>
+          <button type="button" class="btn" disabled={vc.running} onclick={chooseAudioFolder}>Choose Folder…</button>
         {/snippet}
       </DropZone>
     </SetupSection>
@@ -161,7 +161,7 @@
           <p class="status" class:ok={vc.visual?.ok} class:warn={vc.visual && !vc.visual.ok} data-testid="visual-status">{visualStatus}</p>
         {/if}
         {#snippet actions()}
-          <button type="button" class="btn" onclick={chooseVisual}>Choose…</button>
+          <button type="button" class="btn" disabled={vc.running} onclick={chooseVisual}>Choose…</button>
         {/snippet}
       </DropZone>
     </SetupSection>
