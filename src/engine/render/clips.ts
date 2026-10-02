@@ -30,7 +30,7 @@ import {
 } from "mediabunny";
 import { clipOutputFormat, clipOutputName, type ClipFormat, type ClipRequest } from "../clips";
 import { decodeAiff, encodeAiff24, type PcmAudio } from "../media/aiff";
-import { decodesHere } from "../media/audio-decode";
+import { DECODE_STALL_MS } from "../media/audio-decode";
 import { parseStreamInfo, registerFlacDecoder } from "../media/flac-decoder";
 import { mediaKind } from "../media-kind";
 import type { ConflictPolicy } from "../naming";
@@ -119,6 +119,7 @@ async function cutClip(
   format: ClipFormat,
   cb: ClipCallbacks,
   onFraction: (fraction: number) => void,
+  silent = false,
 ): Promise<Uint8Array> {
   if (format === "aiff") return cutAiff(source, clip, index);
   const input = new Input({ source: new BlobSource(source), formats: ALL_FORMATS });
@@ -131,7 +132,7 @@ async function cutClip(
     }
     if (clip.start >= duration) throw pastEnd(index, source.name);
     const output = new Output({ format: outputFormat(format), target: new BufferTarget() });
-    const options = format === "mp4" ? await videoOptions(input, source.name, cb) : await audioOptions(input, source.name, format);
+    const options = format === "mp4" ? await videoOptions(input, source.name, cb, silent) : await audioOptions(input, source.name, format);
     const conversion = await Conversion.init({
       input,
       output,
@@ -141,15 +142,46 @@ async function cutClip(
       showWarnings: false,
     });
     assertUsable(conversion, source.name, format === "mp4" ? "video" : "audio");
+    // A decoder that claims support but hangs (WebKitGTK's Vorbis) never progresses: give up
+    // after DECODE_STALL_MS without progress and fall back (see below).
+    let lastProgress = performance.now();
+    let stalled = false;
+    let onStall = () => {};
+    const stall = new Promise<void>((resolve) => (onStall = resolve));
     conversion.onProgress = (progress) => {
+      lastProgress = performance.now();
       if (cb.cancelled()) void conversion.cancel();
       else onFraction(progress);
     };
+    const watchdog = setInterval(() => {
+      if (cb.cancelled()) {
+        void conversion.cancel().catch(() => {});
+        onStall(); // Don't wait on a hung execute() either.
+      } else if (performance.now() - lastProgress > DECODE_STALL_MS) {
+        stalled = true;
+        void conversion.cancel().catch(() => {});
+        // `execute()` may never settle while the decoder hangs: stop waiting for it. The page
+        // terminates this Worker after the job, which disposes of the abandoned conversion.
+        onStall();
+      }
+    }, 250);
+    const execution = conversion.execute();
+    execution.catch(() => {});
     try {
-      await conversion.execute();
+      await Promise.race([execution, stall]);
     } catch (error) {
-      if (error instanceof ConversionCanceledError || cb.cancelled()) throw new CancelledError();
-      throw error;
+      if (cb.cancelled()) throw new CancelledError();
+      if (!stalled) throw error instanceof ConversionCanceledError ? new CancelledError() : error;
+    } finally {
+      clearInterval(watchdog);
+    }
+    if (cb.cancelled()) throw new CancelledError();
+    if (stalled) {
+      const audio = await input.getPrimaryAudioTrack();
+      // Audio: the page decodes it instead. Video: assume the audio hung and cut it silent.
+      if (format !== "mp4" && audio) throw new UndecodableAudioError(source.name, audio.codec, audio.sampleRate, audio.numberOfChannels);
+      if (format === "mp4" && audio && !silent) return cutClip(source, clip, index, format, cb, onFraction, true);
+      throw new Error(`${source.name} could not be decoded by this browser.`);
     }
     return new Uint8Array(output.target.buffer!);
   } finally {
@@ -192,7 +224,7 @@ async function ensureEncoder(codec: AudioCodec): Promise<void> {
 type TrackOptions = { video: ConversionVideoOptions; audio: ConversionAudioOptions };
 
 /** First video stream re-encoded to H.264 (High quality preset), optional AAC 256k audio. */
-async function videoOptions(input: Input, name: string, cb: ClipCallbacks): Promise<TrackOptions> {
+async function videoOptions(input: Input, name: string, cb: ClipCallbacks, silent: boolean): Promise<TrackOptions> {
   const video = await input.getPrimaryVideoTrack();
   if (!video) throw new Error(`${name} contains no usable video.`);
   const width = video.displayWidth - (video.displayWidth % 2);
@@ -204,7 +236,7 @@ async function videoOptions(input: Input, name: string, cb: ClipCallbacks): Prom
   if (codec !== "avc") cb.warn(`This browser can't encode H.264 here, so the video uses ${codec.toUpperCase()} in MP4.`);
   const odd = width !== video.displayWidth || height !== video.displayHeight;
   const audio = await input.getPrimaryAudioTrack();
-  const audioOk = !!audio && (await decodesHere(audio));
+  const audioOk = !!audio && !silent && (await audio.canDecode());
   if (audioOk) await ensureEncoder("aac");
   else if (audio) cb.warn(`${name} has audio this browser can't decode, so the clips are silent.`);
   return {
@@ -236,7 +268,7 @@ function audioEncoding(format: AudioFormat): { codec: AudioCodec; bitrate?: numb
 async function audioOptions(input: Input, name: string, format: AudioFormat): Promise<TrackOptions> {
   const track = await input.getPrimaryAudioTrack();
   if (!track) throw new Error(`${name} contains no usable audio.`);
-  if (!(await decodesHere(track))) throw new UndecodableAudioError(name, track.codec, track.sampleRate, track.numberOfChannels);
+  if (!(await track.canDecode())) throw new UndecodableAudioError(name, track.codec, track.sampleRate, track.numberOfChannels);
   const audio: ConversionAudioOptions = { forceTranscode: true, ...audioEncoding(format) };
   if (format === "flac") {
     // FFmpeg keeps a 16-bit FLAC 16-bit; the encoder picks 16 vs 24 from the sample format.

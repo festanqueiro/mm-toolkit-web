@@ -5,7 +5,7 @@
  * Mediabunny (WebCodecs `AudioDecoder` for compressed codecs).
  */
 
-import { ALL_FORMATS, AudioSampleSink, BlobSource, Input, type InputAudioTrack } from "mediabunny";
+import { ALL_FORMATS, AudioSampleSink, BlobSource, Input } from "mediabunny";
 import { extensionOf } from "../media-kind";
 import { decodeAiff, isAiff, type PcmAudio } from "./aiff";
 import { registerFlacDecoder } from "./flac-decoder";
@@ -54,31 +54,23 @@ function slice(pcm: PcmAudio, range?: DecodeRange): PcmAudio {
 }
 
 /**
- * Whether `track` really decodes in this engine: `canDecode()`, then a short range must
- * decode within `timeoutMs`. Some engines report support and then never produce a sample
- * (WebKitGTK's GStreamer Vorbis decoder hangs), which `canDecode()` can't reveal. Decoding a
- * bounded range to its end flushes the decoder, so decoders that only emit on flush (WebKitGTK's
- * AAC) still pass.
+ * No decoded audio for this long means the decoder has hung: some engines report support and
+ * then never produce a sample (WebKitGTK's GStreamer Vorbis), which `canDecode()` can't reveal.
  */
-export async function decodesHere(track: InputAudioTrack, timeoutMs = 4000): Promise<boolean> {
-  if (!(await track.canDecode())) return false;
-  const start = await track.getFirstTimestamp().catch(() => 0);
-  const samples = new AudioSampleSink(track).samples(start, start + 0.25);
+export let DECODE_STALL_MS = 15_000;
+
+/** Tests only: shorten the stall timeout. */
+export function setDecodeStallMs(ms: number): void {
+  DECODE_STALL_MS = ms;
+}
+
+/** `iterator.next()`, or null when nothing arrives within `ms`. */
+async function nextWithin<T>(iterator: AsyncIterator<T>, ms: number): Promise<IteratorResult<T> | null> {
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const decodeAll = (async () => {
-    let any = false;
-    for await (const sample of samples) {
-      any = true;
-      sample.close();
-    }
-    return any;
-  })().catch(() => false);
   try {
-    return await Promise.race([decodeAll, new Promise<boolean>((resolve) => (timer = setTimeout(() => resolve(false), timeoutMs)))]);
+    return await Promise.race([iterator.next(), new Promise<null>((resolve) => (timer = setTimeout(() => resolve(null), ms)))]);
   } finally {
     clearTimeout(timer);
-    // Don't await: a hung decoder may never settle.
-    void samples.return(undefined).catch(() => {});
   }
 }
 
@@ -92,14 +84,22 @@ async function decodeWithMediabunny(blob: Blob, range?: DecodeRange): Promise<Pc
       throw new AudioDecodeError("could not be read", "unreadable");
     }
     if (!track) throw new AudioDecodeError("contains no usable audio", "empty");
-    if (!(await decodesHere(track))) throw new AudioDecodeError(`uses a codec (${track.codec ?? "unknown"}) this browser can't decode`, "unsupported");
+    if (!(await track.canDecode())) throw new AudioDecodeError(`uses a codec (${track.codec ?? "unknown"}) this browser can't decode`, "unsupported");
     const sampleRate = track.sampleRate;
     const count = track.numberOfChannels;
     const start = range?.start ?? 0;
     const end = range ? range.start + range.duration : Infinity;
     const chunks: { offset: number; planes: Float32Array[] }[] = [];
     let total = 0;
-    for await (const sample of new AudioSampleSink(track).samples(start, end)) {
+    const samples = new AudioSampleSink(track).samples(start, end);
+    for (;;) {
+      const next = await nextWithin(samples, DECODE_STALL_MS);
+      if (!next) {
+        void samples.return(undefined).catch(() => {});
+        throw new AudioDecodeError(`uses a codec (${track.codec ?? "unknown"}) this browser can't decode`, "unsupported");
+      }
+      if (next.done) break;
+      const sample = next.value;
       const offset = Math.round((sample.timestamp - start) * sampleRate);
       const skip = Math.max(0, -offset);
       const limit = range ? Math.round(range.duration * sampleRate) : Infinity;

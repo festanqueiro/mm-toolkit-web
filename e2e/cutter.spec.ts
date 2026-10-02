@@ -121,6 +121,8 @@ for (const [file, ext, codec] of [
   ["tone-4s.ogg", "ogg", "opus"],
 ] as const) {
   test(`keeps the source format: ${ext}`, async ({ page, browserName }) => {
+    // Engines that hang decoding (WebKitGTK Vorbis) take the 15 s stall watchdog + Web Audio path.
+    test.setTimeout(90_000);
     await open(page, browserName);
     await chooseSource(page, media(file));
     await expect(page.getByTestId("format-status")).toHaveText(`✓ Audio clips will be exported as ${ext.toUpperCase()} files.`);
