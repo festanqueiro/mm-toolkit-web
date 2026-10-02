@@ -114,6 +114,7 @@ class CutterState {
     this.failure = null;
     this.warnings = [];
     this.results = [];
+    this.lastJobId = null;
     this.progress = { percent: 0, status: CLIP_PROGRESS.preparing };
     const s = app.settings;
     // Desktop saves these when the job starts. The source isn't re-openable yet (input persistence).
@@ -227,6 +228,7 @@ class CutterState {
     this.progress = null;
     this.warnings = [];
     this.results = [];
+    this.failure = null;
     void this.setSource(null);
     this.rows = [emptyClipRow()];
     this.currentKey = null;

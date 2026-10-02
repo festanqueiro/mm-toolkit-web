@@ -19,6 +19,7 @@
     void (async () => {
       for (const result of list) {
         const file = await result.open().catch(() => null);
+        if (!live) return; // torn down while opening: don't create URLs nobody will revoke
         if (!file) continue;
         made.push({ name: result.name, url: URL.createObjectURL(file), size: file.size, video: mediaKind(result.name) === "video" });
       }

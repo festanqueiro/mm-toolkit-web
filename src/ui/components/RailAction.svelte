@@ -28,11 +28,8 @@
 </script>
 
 <div class="rail-action">
-  {#if !requirement.ready}
-    <p class="requirements" data-testid="requirements" aria-live="polite">{requirement.message}</p>
-  {:else}
-    <p class="requirements ok" data-testid="requirements" aria-live="polite">{requirement.message}</p>
-  {/if}
+  <!-- One element across readiness changes: a re-created live region isn't announced. -->
+  <p class="requirements" class:ok={requirement.ready} data-testid="requirements" aria-live="polite">{requirement.message}</p>
   <button type="button" class="btn primary start" disabled={!requirement.ready} title={requirement.message} onclick={onstart}>{label}</button>
   {#if progress}
     <div class="progress-row">
