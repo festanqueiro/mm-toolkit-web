@@ -87,6 +87,7 @@ class StemSplitterState {
     this.failure = null;
     this.warnings = [];
     this.results = [];
+    this.lastJobId = null;
     this.progress = { percent: 0, status: `Preparing ${source.file.name}…` };
     const s = app.settings;
     const jobId = historyId();
@@ -201,6 +202,7 @@ class StemSplitterState {
     this.progress = null;
     this.warnings = [];
     this.results = [];
+    this.failure = null;
     this.pendingSource = null;
     void this.setSource(null);
     this.stems = [...DEFAULT_STEMS];

@@ -107,6 +107,86 @@ test("results list outputs that share a name", async ({ page, browserName }) => 
   await expect(results).toContainText("short-10s-mono.mp3");
 });
 
+test("Open in History is offered only for a job that was recorded", async ({ page, browserName }) => {
+  if (browserName === "chromium") await mockFolderPicker(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/#/converter");
+  const results = page.getByRole("complementary", { name: "Output" }).getByRole("region", { name: "Results" });
+  await convertOne(page, browserName);
+  await expect(results.getByRole("button", { name: "Open in History" })).toBeVisible();
+  // History storage now fails: the next job's results must not link to the previous job.
+  await page.evaluate(() => {
+    IDBObjectStore.prototype.put = () => {
+      throw new DOMException("quota", "QuotaExceededError");
+    };
+  });
+  await page.getByRole("button", { name: "Convert Files" }).click();
+  await expect(page.getByTestId("progress-status")).toHaveText("Finished 1 conversion", { timeout: 60_000 });
+  await expect(results.getByRole("listitem")).toHaveCount(1);
+  await expect(results.getByRole("button", { name: "Open in History" })).toHaveCount(0);
+});
+
+test("Clear also dismisses a failure", async ({ page, browserName }) => {
+  test.skip(browserName !== "webkit", "Needs a job failure, which only WebKit gives for a blocked worker script.");
+  await page.goto("/#/converter");
+  const chooser = page.waitForEvent("filechooser");
+  await page.getByRole("button", { name: "Choose Audio or Video Files…" }).click();
+  await (await chooser).setFiles(golden("audio/short-10s-mono.wav"));
+  await page.route(/job[-.]host|job\.worker/, (route) => route.abort());
+  await page.getByRole("button", { name: "Convert Files" }).click();
+  await expect(page.getByTestId("job-error")).toBeVisible({ timeout: 30_000 });
+  await page.getByRole("button", { name: "Clear" }).click();
+  await expect(page.getByTestId("job-error")).toHaveCount(0);
+});
+
+test("the requirements line stays one live region as readiness changes", async ({ page, browserName }) => {
+  test.skip(browserName === "chromium", "Tier 1 also needs a folder; one engine without it is enough.");
+  await page.goto("/#/converter");
+  const line = await page.getByTestId("requirements").elementHandle();
+  const chooser = page.waitForEvent("filechooser");
+  await page.getByRole("button", { name: "Choose Audio or Video Files…" }).click();
+  await (await chooser).setFiles(golden("audio/short-10s-mono.wav"));
+  await expect(page.getByRole("button", { name: "Convert Files" })).toBeEnabled();
+  expect(await line!.evaluate((el) => el.isConnected)).toBe(true);
+});
+
+test("results revoke their object URLs even when the page is left while files open", async ({ page, browserName }) => {
+  test.skip(browserName !== "chromium", "Opens results from the export folder (Tier 1).");
+  await mockFolderPicker(page);
+  await page.addInitScript(() => {
+    const live = new Set<string>();
+    (window as unknown as { liveUrls: Set<string> }).liveUrls = live;
+    const create = URL.createObjectURL.bind(URL);
+    const revoke = URL.revokeObjectURL.bind(URL);
+    URL.createObjectURL = (obj) => {
+      const url = create(obj);
+      live.add(url);
+      return url;
+    };
+    URL.revokeObjectURL = (url) => {
+      live.delete(url);
+      revoke(url);
+    };
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/#/converter");
+  await convertOne(page, browserName);
+  const before = await page.evaluate(() => (window as unknown as { liveUrls: Set<string> }).liveUrls.size);
+  // A second job whose results open slowly; leave the page while they are opening.
+  await page.evaluate(() => {
+    const getFile = FileSystemFileHandle.prototype.getFile;
+    FileSystemFileHandle.prototype.getFile = async function () {
+      await new Promise((r) => setTimeout(r, 300));
+      return getFile.call(this);
+    };
+  });
+  await page.getByRole("button", { name: "Convert Files" }).click();
+  await expect(page.getByTestId("progress-status")).toHaveText("Finished 1 conversion", { timeout: 60_000 });
+  await page.goto("/#/about");
+  await page.waitForTimeout(1000);
+  expect(await page.evaluate(() => (window as unknown as { liveUrls: Set<string> }).liveUrls.size)).toBeLessThan(before);
+});
+
 test("narrow screens: one column, the action in a bottom bar, no overflow", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 800 });
   await page.goto("/#/converter");

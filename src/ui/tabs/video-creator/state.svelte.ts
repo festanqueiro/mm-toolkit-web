@@ -313,6 +313,7 @@ class VideoCreatorState {
     this.failure = null;
     this.warnings = [];
     this.results = [];
+    this.lastJobId = null;
     this.progress = { percent: 0, status: "Preparing…", outputs: 0 };
     const s = app.settings;
     const effects = $state.snapshot(this.effects) as EffectSettings;
@@ -427,6 +428,7 @@ class VideoCreatorState {
     this.progress = null;
     this.warnings = [];
     this.results = [];
+    this.failure = null;
     this.stopPreview();
     this.stopLivePreview?.();
     this.audio = null;

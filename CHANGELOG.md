@@ -6,6 +6,14 @@ policy in `CLAUDE.md` (patch by default, minor/major only when requested).
 
 ## [Unreleased]
 
+## [0.1.21] - 2026-10-03
+
+### Fixed
+- "Open in History" under Results no longer links to the previous job when the new one couldn't be recorded.
+- Clear also dismisses a failure card.
+- Results no longer leak memory when you leave the page while finished files are still opening.
+- Screen readers announce the "To enable …" requirements line again when it changes.
+
 ## [0.1.20] - 2026-10-03
 
 ### Changed

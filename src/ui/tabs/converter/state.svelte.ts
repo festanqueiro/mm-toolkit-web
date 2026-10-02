@@ -109,6 +109,7 @@ class ConverterState {
     this.failure = null;
     this.warnings = [];
     this.results = [];
+    this.lastJobId = null;
     this.progress = { percent: 0, status: CONVERT_PROGRESS.preparing };
     const s = app.settings;
     const jobId = historyId();
@@ -229,6 +230,7 @@ class ConverterState {
     this.progress = null;
     this.warnings = [];
     this.results = [];
+    this.failure = null;
     this.files = [];
     this.selected = [];
     this.pendingNames = [];
