@@ -6,6 +6,17 @@ policy in `CLAUDE.md` (patch by default, minor/major only when requested).
 
 ## [Unreleased]
 
+## [0.1.10] - 2026-10-02
+
+### Added
+- Media Cutter previews sources the browser can't play natively:
+  - Audio (e.g. AIFF in Chrome/Firefox): a waveform you can click or drag to seek, with playback decoded in short chunks around the playhead.
+  - Video (e.g. MKV in Safari): decoded frames on a canvas while scrubbing and playing, with the soundtrack.
+  - Set Start / Set End and per-clip ▶ preview work in every mode.
+
+### Changed
+- AIFF is read by byte range (header chunks + the needed span) instead of loading the whole file, for the Cutter and the Video Creator's snippet decoding.
+
 ## [0.1.9] - 2026-10-02
 
 ### Added

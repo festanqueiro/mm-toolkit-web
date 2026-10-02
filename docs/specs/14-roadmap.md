@@ -33,7 +33,7 @@
 ## Phase 3 — Media Cutter & Media Converter
 
 - [x] Cutter: player/timeline, Set Start/End, clip table, WAV/AIFF in TS, AAC via WebCodecs (WASM fallback), MP3/FLAC via Mediabunny's WASM encoders, video trim via Mediabunny. OGG is Opus-in-Ogg until ADR-003.
-- [ ] Cutter preview fallbacks (waveform, proxy). Today an unplayable source disables the transport with a message.
+- [x] Cutter preview fallbacks: waveform + chunked Web Audio for audio, decoded frames for video (no transcoded proxy needed).
 - [ ] Converter: the full matrix in [06](06-media-converter.md), WASM size ceiling, batch ZIP.
 
 ## Phase 4 — Polish → `1.0.0`

@@ -26,43 +26,69 @@ export const isAiff = (bytes: ArrayBuffer) => {
   return fourCC(view, 0) === "FORM" && ["AIFF", "AIFC"].includes(fourCC(view, 8));
 };
 
-export function decodeAiff(bytes: ArrayBuffer): PcmAudio {
-  if (!isAiff(bytes)) throw new AiffError("Not an AIFF file.");
-  const view = new DataView(bytes);
-  const aifc = fourCC(view, 8) === "AIFC";
-  let comm: { channels: number; frames: number; bits: number; rate: number; compression: string } | null = null;
+/** Where the samples live and how they're encoded. `dataOffset` is absolute in the file. */
+export type AiffLayout = {
+  channels: number;
+  frames: number;
+  sampleRate: number;
+  bytesPer: number;
+  float: boolean;
+  little: boolean;
+  dataOffset: number;
+};
+
+function commLayout(view: DataView, body: number, size: number, aifc: boolean) {
+  const compressionId = aifc && size >= 22 ? fourCC(view, body + 18) : "NONE";
+  const compression = compressionId.toLowerCase();
+  if (!["none", "sowt", "fl32", "fl64", "in24", "in32", "twos"].includes(compression)) {
+    throw new AiffError(`Unsupported AIFF-C compression "${compressionId}".`);
+  }
+  const channels = view.getInt16(body);
+  const bits = view.getInt16(body + 6);
+  const bytesPer = compression === "fl64" ? 8 : compression === "fl32" ? 4 : Math.ceil(bits / 8);
+  if (channels < 1 || bytesPer < 1 || bytesPer > 8) throw new AiffError("Unsupported AIFF sample format.");
+  return {
+    channels,
+    frames: view.getUint32(body + 2),
+    sampleRate: readExtended(view, body + 8),
+    bytesPer,
+    float: compression === "fl32" || compression === "fl64",
+    little: compression === "sowt",
+  };
+}
+
+/**
+ * Find COMM and SSND by reading chunk headers only, so a long file is never loaded whole.
+ * `read(offset, length)` returns those bytes of the file.
+ */
+export async function readAiffLayout(read: (offset: number, length: number) => Promise<ArrayBuffer>, size: number): Promise<AiffLayout> {
+  if (!isAiff(await read(0, 12))) throw new AiffError("Not an AIFF file.");
+  const aifc = fourCC(new DataView(await read(8, 4)), 0) === "AIFC";
+  let comm: ReturnType<typeof commLayout> | null = null;
   let ssnd: { offset: number; length: number } | null = null;
   let offset = 12;
-  while (offset + 8 <= view.byteLength) {
-    const id = fourCC(view, offset);
-    const size = view.getUint32(offset + 4);
+  while (offset + 8 <= size && !(comm && ssnd)) {
+    const header = new DataView(await read(offset, 8));
+    const id = fourCC(header, 0);
+    const chunkSize = header.getUint32(4);
     const body = offset + 8;
-    if (id === "COMM") {
-      comm = {
-        channels: view.getInt16(body),
-        frames: view.getUint32(body + 2),
-        bits: view.getInt16(body + 6),
-        rate: readExtended(view, body + 8),
-        compression: aifc && size >= 22 ? fourCC(view, body + 18) : "NONE",
-      };
-    } else if (id === "SSND") {
-      const dataOffset = view.getUint32(body);
-      ssnd = { offset: body + 8 + dataOffset, length: Math.min(size - 8 - dataOffset, view.byteLength - body - 8 - dataOffset) };
+    if (id === "COMM") comm = commLayout(new DataView(await read(body, Math.min(chunkSize, 64))), 0, chunkSize, aifc);
+    else if (id === "SSND") {
+      const dataOffset = new DataView(await read(body, 4)).getUint32(0);
+      ssnd = { offset: body + 8 + dataOffset, length: Math.min(chunkSize - 8 - dataOffset, size - body - 8 - dataOffset) };
     }
-    offset = body + size + (size % 2);
+    offset = body + chunkSize + (chunkSize % 2);
   }
   if (!comm || !ssnd) throw new AiffError("AIFF file is missing its COMM or SSND chunk.");
-  const { channels: count, bits, rate } = comm;
-  const compression = comm.compression.toLowerCase();
-  const float = compression === "fl32" || compression === "fl64";
-  const little = compression === "sowt";
-  if (!["none", "sowt", "fl32", "fl64", "in24", "in32", "twos"].includes(compression)) {
-    throw new AiffError(`Unsupported AIFF-C compression "${comm.compression}".`);
-  }
-  const bytesPer = compression === "fl64" ? 8 : compression === "fl32" ? 4 : Math.ceil(bits / 8);
-  if (count < 1 || bytesPer < 1 || bytesPer > 8) throw new AiffError("Unsupported AIFF sample format.");
-  const frames = Math.min(comm.frames, Math.floor(ssnd.length / (bytesPer * count)));
-  const channels = Array.from({ length: count }, () => new Float32Array(frames));
+  return { ...comm, frames: Math.max(0, Math.min(comm.frames, Math.floor(ssnd.length / (comm.bytesPer * comm.channels)))), dataOffset: ssnd.offset };
+}
+
+/** Decode `count` frames from `bytes`, which start at frame `0` of the span to decode. */
+export function decodeAiffFrames(bytes: ArrayBuffer, layout: AiffLayout, count: number): Float32Array[] {
+  const view = new DataView(bytes);
+  const { channels: n, bytesPer, float, little } = layout;
+  const frames = Math.min(count, Math.floor(bytes.byteLength / (bytesPer * n)));
+  const channels = Array.from({ length: n }, () => new Float32Array(frames));
   const scale = 2 ** (bytesPer * 8 - 1);
   const read = (at: number): number => {
     if (float) return bytesPer === 8 ? view.getFloat64(at) : view.getFloat32(at);
@@ -80,9 +106,53 @@ export function decodeAiff(bytes: ArrayBuffer): PcmAudio {
     }
   };
   for (let i = 0; i < frames; i++) {
-    for (let c = 0; c < count; c++) channels[c]![i] = read(ssnd.offset + (i * count + c) * bytesPer);
+    for (let c = 0; c < n; c++) channels[c]![i] = read((i * n + c) * bytesPer);
   }
-  return { sampleRate: rate, channels };
+  return channels;
+}
+
+export const blobReader = (blob: Blob) => (offset: number, length: number) => blob.slice(offset, offset + length).arrayBuffer();
+
+/** Decode a whole AIFF held in memory. */
+export function decodeAiff(bytes: ArrayBuffer): PcmAudio {
+  const layout = readAiffLayoutSync(bytes);
+  const span = bytes.slice(layout.dataOffset, layout.dataOffset + layout.frames * layout.bytesPer * layout.channels);
+  return { sampleRate: layout.sampleRate, channels: decodeAiffFrames(span, layout, layout.frames) };
+}
+
+function readAiffLayoutSync(bytes: ArrayBuffer): AiffLayout {
+  if (!isAiff(bytes)) throw new AiffError("Not an AIFF file.");
+  const view = new DataView(bytes);
+  const aifc = fourCC(view, 8) === "AIFC";
+  let comm: ReturnType<typeof commLayout> | null = null;
+  let ssnd: { offset: number; length: number } | null = null;
+  let offset = 12;
+  while (offset + 8 <= view.byteLength) {
+    const id = fourCC(view, offset);
+    const size = view.getUint32(offset + 4);
+    const body = offset + 8;
+    if (id === "COMM") comm = commLayout(view, body, size, aifc);
+    else if (id === "SSND") {
+      const dataOffset = view.getUint32(body);
+      ssnd = { offset: body + 8 + dataOffset, length: Math.min(size - 8 - dataOffset, view.byteLength - body - 8 - dataOffset) };
+    }
+    offset = body + size + (size % 2);
+  }
+  if (!comm || !ssnd) throw new AiffError("AIFF file is missing its COMM or SSND chunk.");
+  return { ...comm, frames: Math.max(0, Math.min(comm.frames, Math.floor(ssnd.length / (comm.bytesPer * comm.channels)))), dataOffset: ssnd.offset };
+}
+
+/**
+ * Decode `[start, start + duration)` (or everything) of an AIFF Blob, reading only the
+ * header chunks and that span's bytes.
+ */
+export async function decodeAiffBlob(blob: Blob, range?: { start: number; duration: number }): Promise<PcmAudio> {
+  const layout = await readAiffLayout(blobReader(blob), blob.size);
+  const from = range ? Math.min(layout.frames, Math.max(0, Math.round(range.start * layout.sampleRate))) : 0;
+  const to = range ? Math.min(layout.frames, Math.max(from, Math.round((range.start + range.duration) * layout.sampleRate))) : layout.frames;
+  const frameBytes = layout.bytesPer * layout.channels;
+  const span = await blob.slice(layout.dataOffset + from * frameBytes, layout.dataOffset + to * frameBytes).arrayBuffer();
+  return { sampleRate: layout.sampleRate, channels: decodeAiffFrames(span, layout, to - from) };
 }
 
 /** IEEE 754 80-bit extended (big-endian) for a positive integer-ish sample rate. */

@@ -100,3 +100,28 @@ describe("normaliseStereo16", () => {
     expect(Array.from(out.channels[0]!)).toEqual([Math.fround(Math.round(0.1 * 32768) / 32768), Math.fround(32767 / 32768), -1]);
   });
 });
+
+describe("AIFF range decoding (reads only the span it needs)", () => {
+  it("matches slicing the whole decode, and reads few bytes", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { decodeAiff, decodeAiffBlob } = await import("../src/engine/media/aiff");
+    const bytes = readFileSync(new URL("../fixtures/media/short-10s-mono.aiff", import.meta.url));
+    const whole = decodeAiff(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
+    const blob = new Blob([bytes]);
+    let read = 0;
+    const counting = {
+      size: blob.size,
+      slice: (a?: number, b?: number) => {
+        read += Math.min(b ?? blob.size, blob.size) - (a ?? 0);
+        return blob.slice(a, b);
+      },
+    } as Blob;
+    const part = await decodeAiffBlob(counting, { start: 2, duration: 0.5 });
+    const rate = whole.sampleRate;
+    expect(part.sampleRate).toBe(rate);
+    expect(part.channels[0]).toEqual(whole.channels[0]!.slice(Math.round(2 * rate), Math.round(2.5 * rate)));
+    expect(read).toBeLessThan(0.5 * rate * 2 + 1024);
+    // Past the end: empty, not an error.
+    expect((await decodeAiffBlob(blob, { start: 60, duration: 1 })).channels[0]!.length).toBe(0);
+  });
+});

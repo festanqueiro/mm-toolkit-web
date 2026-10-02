@@ -23,4 +23,7 @@ ffmpeg -f lavfi -i testsrc=size=320x240:rate=24 -f lavfi -i sine=frequency=440:s
 ffmpeg -ss 26 -t 3 -i ../golden/audio/drop-30s-stereo.wav -c:a flac drop-3s-stereo.flac
 ffmpeg -ss 26 -t 1 -i ../golden/audio/drop-30s-stereo.wav -c:a flac -sample_fmt s32 drop-1s-stereo-24.flac
 ffmpeg -t 2 -i ../golden/audio/short-10s-mono.wav -c:a flac -compression_level 0 short-2s-mono.flac
+# Preview fallback: Matroska, which WebKit can't play natively.
+ffmpeg -f lavfi -i testsrc=size=320x240:rate=24 -f lavfi -i sine=frequency=440:sample_rate=48000 -t 3 \
+  -c:v libx264 -pix_fmt yuv420p -c:a aac -b:a 64k clip-3s-320x240.mkv
 ```
