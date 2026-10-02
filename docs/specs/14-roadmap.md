@@ -41,7 +41,7 @@
 - [x] History: Load Job with re-select flow, OPFS retention (2 GB cap), inline preview, unread badge.
 - [x] PWA: offline, install, update prompt, app badge, File Handling.
 - ~~Settings/history import from desktop.~~ Dropped (2026-10-02): the desktop app may be discontinued.
-- [ ] Accessibility pass: keyboard reordering for the effect list, focus management, ARIA on tables and progress.
+- [ ] Accessibility pass: keyboard reordering for the effect list, focus management, ARIA on tables and progress. Baseline: `e2e/a11y.spec.ts` (axe, WCAG 2.2 AA) is clean on every page in light and dark; the effect list already reorders with ↑/↓ and dialogs are native `<dialog>`. Remaining: focus on route change, History's job list pattern (`listbox` without arrow keys).
 - [ ] Docs: user guide with a browser-support matrix.
 
 ## Backlog (carried from desktop `TODO.md`)
