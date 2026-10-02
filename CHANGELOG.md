@@ -6,6 +6,11 @@ policy in `CLAUDE.md` (patch by default, minor/major only when requested).
 
 ## [Unreleased]
 
+## [0.1.19] - 2026-10-03
+
+### Changed
+- The **Media Cutter** and **Stem Splitter** use the new layout too: setup on the left; export settings, the action, errors and the finished files (with a player and Download each) in the output panel. The Cutter's video player is capped in height so the clip list stays in reach.
+
 ## [0.1.18] - 2026-10-03
 
 ### Changed
