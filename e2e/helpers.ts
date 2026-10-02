@@ -1,3 +1,8 @@
+import { existsSync, readFileSync } from "node:fs";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
+import { extname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { expect, type Page } from "@playwright/test";
 import { ALL_FORMATS, BufferSource, Input } from "mediabunny";
 
@@ -84,3 +89,44 @@ export const historyRecords = (page: Page) =>
         };
       }),
   );
+
+/**
+ * Serve the production build from a server this test can switch off: a real "network gone",
+ * unlike Playwright's offline emulation and routing, which bypass or break service workers
+ * in Chromium and WebKit.
+ */
+/**
+ * `transform(path, body)` may rewrite a response (e.g. a stale index.html or a newer sw.js).
+ */
+export async function serveDist(
+  transform: (path: string, body: Buffer) => Buffer = (_path, body) => body,
+): Promise<{ origin: string; stop: () => Promise<void> }> {
+  const types: Record<string, string> = {
+    ".html": "text/html",
+    ".js": "text/javascript",
+    ".css": "text/css",
+    ".png": "image/png",
+    ".webmanifest": "application/manifest+json",
+    ".wasm": "application/wasm",
+  };
+  const root = fileURLToPath(new URL("../dist/", import.meta.url));
+  const server = createServer((req, res) => {
+    const path = decodeURIComponent((req.url ?? "/").split("?")[0]!);
+    const file = join(root, path.endsWith("/") ? `${path}index.html` : path);
+    if (!file.startsWith(root) || !existsSync(file)) {
+      res.writeHead(404).end();
+      return;
+    }
+    res.writeHead(200, { "content-type": types[extname(file)] ?? "application/octet-stream", "cache-control": "no-store" }).end(transform(path, readFileSync(file)));
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address() as AddressInfo;
+  return {
+    origin: `http://127.0.0.1:${port}`,
+    stop: () =>
+      new Promise<void>((resolve) => {
+        server.closeAllConnections();
+        server.close(() => resolve());
+      }),
+  };
+}

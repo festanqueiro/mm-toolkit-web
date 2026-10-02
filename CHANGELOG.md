@@ -6,6 +6,11 @@ policy in `CLAUDE.md` (patch by default, minor/major only when requested).
 
 ## [Unreleased]
 
+## [0.1.16] - 2026-10-02
+
+### Fixed
+- **The app could fail to load after an update** (404 on its own scripts, seen in Safari). The offline cache could store an outdated page together with newer files. Installs now bypass the browser's HTTP cache and refuse an inconsistent page, and new versions take over by themselves, so anyone affected recovers after reloading twice.
+
 ## [0.1.15] - 2026-10-02
 
 ### Added

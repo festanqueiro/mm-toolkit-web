@@ -1,47 +1,9 @@
-import { existsSync, readFileSync } from "node:fs";
-import { createServer } from "node:http";
-import type { AddressInfo } from "node:net";
-import { extname, join } from "node:path";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
+import { serveDist } from "./helpers";
 
 const golden = (name: string) => fileURLToPath(new URL(`../fixtures/golden/${name}`, import.meta.url));
-
-/**
- * Serve the production build from a server this test can switch off: a real "network gone",
- * unlike Playwright's offline emulation and routing, which bypass or break service workers
- * in Chromium and WebKit.
- */
-async function serveDist(): Promise<{ origin: string; stop: () => Promise<void> }> {
-  const types: Record<string, string> = {
-    ".html": "text/html",
-    ".js": "text/javascript",
-    ".css": "text/css",
-    ".png": "image/png",
-    ".webmanifest": "application/manifest+json",
-    ".wasm": "application/wasm",
-  };
-  const root = fileURLToPath(new URL("../dist/", import.meta.url));
-  const server = createServer((req, res) => {
-    const path = decodeURIComponent((req.url ?? "/").split("?")[0]!);
-    const file = join(root, path.endsWith("/") ? `${path}index.html` : path);
-    if (!file.startsWith(root) || !existsSync(file)) {
-      res.writeHead(404).end();
-      return;
-    }
-    res.writeHead(200, { "content-type": types[extname(file)] ?? "application/octet-stream" }).end(readFileSync(file));
-  });
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const { port } = server.address() as AddressInfo;
-  return {
-    origin: `http://127.0.0.1:${port}`,
-    stop: () =>
-      new Promise<void>((resolve) => {
-        server.closeAllConnections();
-        server.close(() => resolve());
-      }),
-  };
-}
 
 test("works offline after the first load, including a clip job", async ({ page, browserName }) => {
   test.slow();
