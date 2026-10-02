@@ -4,10 +4,13 @@
     audioStatus,
     dropDialogMessage,
     generateLabel,
+    hexColor,
+    PROFILES,
     requirements,
     trackOptions,
   } from "../../../engine/video-creator";
   import { filesFromDrop, pickFiles } from "../../../io/pick";
+  import Icon from "../../Icon.svelte";
   import Accordion from "../../components/Accordion.svelte";
   import Modal from "../../components/Modal.svelte";
   import PageHeader from "../../components/PageHeader.svelte";
@@ -105,6 +108,18 @@
     if (dropKey) void vc.detectDrop(dropKey, value);
   }
 
+  // ---- Collapsed-section summaries ----
+  const EFFECT_NAMES = { overlay: "Overlay", bass_blur: "Blur", rotate: "Rotate", vhs: "VHS", glitch: "Glitch" } as const;
+  const effectsSummary = $derived(vc.effects.order.filter((k) => vc.effects[k].enabled).map((k) => EFFECT_NAMES[k]).join(" → ") || "None");
+  const layersSummary = $derived(
+    (vc.effects.background.mode === "image" ? "Image background" : hexColor(vc.effects.background.color)) +
+      (vc.layers.overlay.image ? " + overlay" : ""),
+  );
+  const postSummary = $derived(
+    [vc.videoFade && "video fade", vc.audioFade && "audio fade"].filter(Boolean).join(", ") || "No fades",
+  );
+  const outputSummary = $derived(`${PROFILES[vc.profile]?.label ?? ""} · ${vc.fps} fps`);
+
   // ---- Preview ----
   let previewError = $state<string | null>(null);
   async function preview(key: string) {
@@ -112,15 +127,15 @@
   }
 </script>
 
-<PageHeader title="Video Creator" {subtitle} />
+<PageHeader title="Video Creator" {subtitle} icon="music_video" />
 
 <div class="columns">
   <div class="column">
     <Accordion title="Input" open={leftOpen === "input"} ontoggle={() => toggleLeft("input")} disabled={vc.running}>
-      <div class="form">
-        <span class="label" id="audio-label">Audio</span>
+      <div class="zones">
         <div
-          class="field drop"
+          class="zone"
+          class:filled={musicOk}
           class:dragging={dragTarget === "audio"}
           role="group"
           aria-labelledby="audio-label"
@@ -128,19 +143,25 @@
           ondragleave={() => (dragTarget = null)}
           ondrop={dropAudio}
         >
-          <div class="row">
-            <input class="input path" readonly aria-labelledby="audio-label" placeholder="Nothing selected" value={vc.audio?.label ?? ""} />
+          <span class="zone-icon" aria-hidden="true"><Icon name={vc.audio?.folder ? "folder_open" : "audiotrack"} size={26} /></span>
+          <div class="zone-body">
+            <span class="zone-title" id="audio-label">Audio</span>
+            {#if vc.audio}
+              <span class="zone-file" title={vc.audio.label}>{vc.audio.label}</span>
+              <p class="status" class:ok={musicOk} class:warn={!musicOk} data-testid="audio-status">{audioStatus(vc.trackCount, true)}</p>
+            {:else}
+              <span class="zone-hint">Drop an audio file or a folder here</span>
+            {/if}
+          </div>
+          <div class="zone-actions">
             <button type="button" class="btn" onclick={chooseAudioFile}>Choose File…</button>
             <button type="button" class="btn" onclick={chooseAudioFolder}>Choose Folder…</button>
           </div>
-          {#if vc.audio}
-            <p class="status" class:ok={musicOk} data-testid="audio-status">{audioStatus(vc.trackCount, true)}</p>
-          {/if}
         </div>
 
-        <span class="label" id="visual-label">Image or video</span>
         <div
-          class="field drop"
+          class="zone"
+          class:filled={visualOk}
           class:dragging={dragTarget === "visual"}
           role="group"
           aria-labelledby="visual-label"
@@ -148,17 +169,24 @@
           ondragleave={() => (dragTarget = null)}
           ondrop={dropVisual}
         >
-          <div class="row">
-            <input class="input path" readonly aria-labelledby="visual-label" placeholder="Nothing selected" value={vc.visualFile?.name ?? ""} />
-            <button type="button" class="btn" onclick={chooseVisual}>Choose…</button>
-          </div>
-          <div class="visual">
-            {#if vc.visual?.ok}
-              <div class="thumb"><img src={vc.visual.thumbnail} alt="Preview of {vc.visualFile?.name}" /></div>
+          {#if vc.visual?.ok}
+            <span class="thumb"><img src={vc.visual.thumbnail} alt="Preview of {vc.visualFile?.name}" /></span>
+          {:else}
+            <span class="zone-icon" aria-hidden="true"><Icon name="image" size={26} /></span>
+          {/if}
+          <div class="zone-body">
+            <span class="zone-title" id="visual-label">Image or video</span>
+            {#if vc.visualFile}
+              <span class="zone-file" title={vc.visualFile.name}>{vc.visualFile.name}</span>
+            {:else}
+              <span class="zone-hint">Drop an image or video here</span>
             {/if}
             {#if visualStatus}
-              <p class="status" class:ok={vc.visual?.ok} data-testid="visual-status">{visualStatus}</p>
+              <p class="status" class:ok={vc.visual?.ok} class:warn={vc.visual && !vc.visual.ok} data-testid="visual-status">{visualStatus}</p>
             {/if}
+          </div>
+          <div class="zone-actions">
+            <button type="button" class="btn" onclick={chooseVisual}>Choose…</button>
           </div>
         </div>
       </div>
@@ -167,6 +195,7 @@
     <Accordion
       title="Audio timestamps"
       grow
+      summary={musicOk ? `${vc.trackCount} track${vc.trackCount === 1 ? "" : "s"}` : ""}
       open={leftOpen === "timestamps"}
       ontoggle={() => toggleLeft("timestamps")}
       disabled={!musicOk || vc.running}
@@ -181,24 +210,34 @@
   </div>
 
   <div class="column">
-    <section class="card" aria-label="Preview">
-      <h2>
-        <button type="button" class="card-toggle" aria-expanded={previewOpen} onclick={() => (previewOpen = !previewOpen)}>
-          <span class="chevron" aria-hidden="true">{previewOpen ? "▾" : "▸"}</span>
-          Preview
-        </button>
-      </h2>
-      {#if previewOpen}
-        <div class="card-body"><LivePreview /></div>
-      {/if}
-    </section>
-    <Accordion title="Visual Effects" open={rightOpen === "effects"} ontoggle={() => toggleRight("effects")} disabled={!downstreamReady}>
+    <Accordion title="Preview" open={previewOpen} ontoggle={() => (previewOpen = !previewOpen)}>
+      <LivePreview />
+    </Accordion>
+    <Accordion
+      title="Visual Effects"
+      summary={downstreamReady ? effectsSummary : ""}
+      open={rightOpen === "effects"}
+      ontoggle={() => toggleRight("effects")}
+      disabled={!downstreamReady}
+    >
       <EffectsList disabled={!downstreamReady} />
     </Accordion>
-    <Accordion title="Layers" open={rightOpen === "layers"} ontoggle={() => toggleRight("layers")} disabled={!downstreamReady}>
+    <Accordion
+      title="Layers"
+      summary={downstreamReady ? layersSummary : ""}
+      open={rightOpen === "layers"}
+      ontoggle={() => toggleRight("layers")}
+      disabled={!downstreamReady}
+    >
       <Layers disabled={!downstreamReady} />
     </Accordion>
-    <Accordion title="Post-Effects" open={rightOpen === "post"} ontoggle={() => toggleRight("post")} disabled={!downstreamReady}>
+    <Accordion
+      title="Post-Effects"
+      summary={downstreamReady ? postSummary : ""}
+      open={rightOpen === "post"}
+      ontoggle={() => toggleRight("post")}
+      disabled={!downstreamReady}
+    >
       <div class="form">
         {#if isVideo}
           <span class="label">Video sound</span>
@@ -210,15 +249,21 @@
         <label class="check"><input type="checkbox" bind:checked={vc.audioFade} /> Fade audio in/out</label>
       </div>
     </Accordion>
-    <Accordion title="Output" open={rightOpen === "output"} ontoggle={() => toggleRight("output")} disabled={!downstreamReady}>
+    <Accordion
+      title="Output"
+      summary={downstreamReady ? outputSummary : ""}
+      open={rightOpen === "output"}
+      ontoggle={() => toggleRight("output")}
+      disabled={!downstreamReady}
+    >
       <Output disabled={!downstreamReady} tracks={tracks.options} />
     </Accordion>
   </div>
 </div>
 
-<footer class="footer">
-  <button type="button" class="btn" disabled={vc.running} onclick={() => vc.clear()}>Clear</button>
-  <p class="requirements" class:ok={req.ready} data-testid="requirements">{req.message}</p>
+<footer class="action-bar">
+  <button type="button" class="btn ghost" disabled={vc.running} onclick={() => vc.clear()}>Clear</button>
+  <p class="requirements" class:ok={req.ready} data-testid="requirements" aria-live="polite">{req.message}</p>
   <button type="button" class="btn primary generate" disabled title="Video rendering arrives in the next update.">
     {generateLabel(vc.trackCount)}
   </button>
@@ -249,126 +294,119 @@
 <style>
   .columns {
     display: grid;
-    gap: 14px;
+    gap: 16px;
     align-items: start;
   }
   @media (min-width: 900px) {
     .columns {
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     }
   }
   .column {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 12px;
     min-width: 0;
   }
-  .form {
+  .zones {
     display: grid;
-    grid-template-columns: minmax(110px, 150px) 1fr;
-    gap: 14px 14px;
-    align-items: start;
+    gap: 12px;
   }
-  @media (max-width: 560px) {
-    .form {
-      grid-template-columns: 1fr;
-      gap: 6px;
+  .zone {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas: "icon body" "actions actions";
+    gap: 10px 14px;
+    align-items: center;
+    padding: 14px;
+    border: 1.5px dashed var(--border-strong);
+    border-radius: var(--radius);
+    background: var(--surface-sunken);
+    transition:
+      border-color 0.15s,
+      background-color 0.15s;
+  }
+  @media (min-width: 560px) {
+    .zone {
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      grid-template-areas: "icon body actions";
     }
   }
-  .label {
-    padding-top: 7px;
-    font-weight: 600;
+  .zone.filled {
+    border-style: solid;
+    border-color: var(--border);
+    background: var(--surface);
   }
-  .field {
+  .zone.dragging {
+    border-color: var(--accent);
+    border-style: dashed;
+    background: var(--accent-soft);
+  }
+  .zone-icon {
+    grid-area: icon;
+    display: grid;
+    place-items: center;
+    width: 52px;
+    height: 52px;
+    border-radius: 12px;
+    color: var(--link);
+    background: color-mix(in srgb, var(--brand-blue) 18%, transparent);
+  }
+  .filled .zone-icon {
+    color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .thumb {
+    grid-area: icon;
+    display: grid;
+    place-items: center;
+    width: 72px;
+    height: 72px;
+    border-radius: 10px;
+    background: var(--surface-sunken);
+    border: 1px solid var(--border);
+    overflow: hidden;
+  }
+  .thumb img {
+    max-width: 100%;
+    max-height: 100%;
+  }
+  .zone-body {
+    grid-area: body;
+    display: flex;
+    flex-direction: column;
     min-width: 0;
   }
-  .row {
+  .zone-title {
+    font-weight: 700;
+  }
+  .zone-file {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .zone-hint {
+    color: var(--text-muted);
+    font-size: 0.92rem;
+  }
+  .zone-body .status {
+    margin-top: 2px;
+  }
+  .zone-actions {
+    grid-area: actions;
     display: flex;
     gap: 6px;
     flex-wrap: wrap;
   }
-  .path {
-    flex: 1 1 160px;
-  }
-  .drop {
-    border-radius: 8px;
-    outline: 2px dashed transparent;
-    outline-offset: 4px;
-  }
-  .drop.dragging {
-    outline-color: var(--accent);
-  }
-  .visual {
-    display: flex;
-    gap: 12px;
-    align-items: center;
-  }
-  .thumb {
-    width: 104px;
-    height: 104px;
-    flex: none;
-    margin-top: 8px;
+  .form {
     display: grid;
-    place-items: center;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--surface-alt);
+    grid-template-columns: minmax(110px, 150px) 1fr;
+    gap: 12px 14px;
+    align-items: start;
   }
-  .thumb img {
-    max-width: 94px;
-    max-height: 94px;
-  }
-  .footer {
-    position: sticky;
-    bottom: 0;
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    margin-top: 16px;
-    padding: 12px 0;
-    background: var(--bg);
-    border-top: 1px solid var(--border);
-  }
-  .requirements {
-    flex: 1;
-    margin: 0;
-    color: var(--text-muted);
-  }
-  .requirements.ok {
-    color: var(--ok);
-  }
-  .generate {
-    min-height: 44px;
-  }
-  .card {
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: var(--surface);
-  }
-  .card h2 {
-    margin: 0;
-    font-size: 1rem;
-  }
-  .card-toggle {
-    width: 100%;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 12px 16px;
-    border: 0;
-    background: none;
-    color: var(--text);
-    font: inherit;
-    font-weight: 700;
-    text-align: left;
-    cursor: pointer;
-  }
-  .chevron {
-    width: 1em;
-    color: var(--text-muted);
-  }
-  .card-body {
-    padding: 0 16px 16px;
+  .label {
+    padding-top: 7px;
+    font-weight: 600;
   }
   .check {
     display: flex;
@@ -376,13 +414,61 @@
     align-items: center;
     padding-top: 7px;
   }
+  .row {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .action-bar {
+    position: sticky;
+    bottom: 12px;
+    z-index: 10;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-top: 18px;
+    padding: 10px 12px 10px 10px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: color-mix(in srgb, var(--surface) 88%, transparent);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: var(--shadow-md);
+  }
+  .requirements {
+    flex: 1;
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.93rem;
+  }
+  .requirements.ok {
+    color: var(--ok);
+    font-weight: 600;
+  }
+  .generate {
+    min-height: 44px;
+    padding: 0 22px;
+    border-radius: 12px;
+  }
+  @media (max-width: 560px) {
+    .action-bar {
+      flex-wrap: wrap;
+    }
+    .requirements {
+      order: -1;
+      flex-basis: 100%;
+    }
+    .generate {
+      flex: 1;
+    }
+  }
   .lead-in {
     display: grid;
     gap: 6px;
     font-weight: 600;
   }
   .lead-in .row {
-    align-items: center;
     font-weight: 400;
   }
   .lead-in .input {

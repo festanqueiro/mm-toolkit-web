@@ -1,6 +1,7 @@
 <script lang="ts">
   import { pyRound } from "../../../engine/py";
   import type { EffectKey } from "../../../engine/effects/settings";
+  import Icon from "../../Icon.svelte";
   import { vc } from "./state.svelte";
 
   let { disabled = false }: { disabled?: boolean } = $props();
@@ -75,7 +76,7 @@
         onpointermove={drag}
         onpointerup={endDrag}
         onpointercancel={endDrag}
-        onkeydown={(e) => keyMove(e, key)}>☰</button
+        onkeydown={(e) => keyMove(e, key)}><Icon name="drag_indicator" size={20} /></button
       >
       <label class="check">
         <input type="checkbox" checked={enabled} {disabled} onchange={(e) => (vc.effects[key].enabled = e.currentTarget.checked)} />
@@ -138,15 +139,24 @@
     gap: 8px;
     min-height: 40px;
     padding: 2px 6px;
-    border-radius: 6px;
-    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    transition:
+      box-shadow 0.15s,
+      border-color 0.15s;
   }
   li.dragging {
-    outline: 2px solid var(--accent);
+    border-color: var(--accent);
+    box-shadow: var(--shadow-md);
   }
   .handle {
     width: 28px;
     height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
     border: 0;
     background: none;
     color: var(--text-muted);

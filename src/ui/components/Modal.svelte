@@ -40,10 +40,12 @@
     border-radius: var(--radius);
     background: var(--surface);
     color: var(--text);
-    padding: 18px 20px;
+    padding: 20px 22px;
+    box-shadow: var(--shadow-md);
   }
   dialog::backdrop {
-    background: rgba(0, 0, 0, 0.45);
+    background: rgba(8, 10, 16, 0.55);
+    backdrop-filter: blur(2px);
   }
   h2 {
     margin: 0 0 12px;

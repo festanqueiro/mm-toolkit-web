@@ -85,7 +85,8 @@
 <style>
   .wrap {
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
+    background: var(--surface);
     overflow: auto;
     max-height: 420px;
   }
@@ -98,8 +99,12 @@
     top: 0;
     background: var(--surface-alt);
     text-align: left;
-    font-weight: 700;
-    padding: 8px 10px;
+    font-weight: 650;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 9px 10px;
   }
   td {
     padding: 6px 10px;
