@@ -6,6 +6,12 @@ policy in `CLAUDE.md` (patch by default, minor/major only when requested).
 
 ## [Unreleased]
 
+## [0.1.20] - 2026-10-03
+
+### Changed
+- The **Video Creator** uses the new layout: live preview, export settings, Generate and the finished videos (with a player and Download each) in the output panel; audio, image or video, track timings, effects, layers and post-effects are always visible. Failures show inline instead of in a dialog.
+- In the output panel, the action stays pinned to the bottom when the panel is taller than the screen.
+
 ## [0.1.19] - 2026-10-03
 
 ### Changed

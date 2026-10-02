@@ -1,5 +1,5 @@
 <script lang="ts">
-  /** Requirements, primary button, progress + Cancel, warnings and Clear (replaces JobFooter). */
+  /** Requirements, primary button, progress + Cancel, warnings and Clear. */
   let {
     progress,
     running,

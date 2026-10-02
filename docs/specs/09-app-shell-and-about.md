@@ -47,6 +47,16 @@ The web app is always the deployed version, so **drop the GitHub check**. With t
 
 Version semantics: `/^v?(\d+)\.(\d+)\.(\d+)$/` after trimming. Anything else isn't a version, so it's never "newer".
 
+## Tool layout (web redesign, 2026-10-02)
+
+Design: [tool layout redesign](../superpowers/specs/2026-10-02-tool-layout-redesign-design.md). Applies to the Video Creator, Media Cutter, Media Converter and Stem Splitter.
+
+- Tool pages are up to **1440 px** wide (other pages 1240 px). The page header spans the width; below it, a **setup** column and an **output rail** (`clamp(300px, 25%, 380px)`, gap 20 px).
+- **Setup**: always-open sections (`h2` + an optional quiet status). No accordions, no step guidance.
+- **Output rail** (`aside` "Output"), sticky below the site header and scrolling internally when taller than the screen: **Preview** (Video Creator) → **Export** (the tool's output settings) → the **action** (requirements, primary button, progress + Cancel, warnings, Clear; pinned to the rail's bottom) → the inline **error** card (`role="alert"`, Details, Dismiss) → **Results**.
+- **Results**: after a job, `Saved to {folder}` or `Downloaded` plus `Open in History`, then one row per output with its size, a player and **Download**. Replaced by the next job's; emptied by Clear.
+- **Under 1000 px**: one column (setup, then the rail blocks) and a sticky bottom bar with the action. No horizontal overflow at 390 px.
+
 ## Home (web-only, requested 2026-10-02)
 
 - The landing page (`#/`, no hash, or any unknown route) is **Home**; it isn't a tab. The brand logo links to it (`aria-current="page"` while there); the tool tabs are unchanged. Document title: `MM Toolkit`.
