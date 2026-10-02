@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
 /** Decoding and audio analysis, kept off the UI thread (spec 01). */
-import { detectDropTime, toMono } from "../engine/analysis/drop";
+import { buildBassEnvelope, detectDropTime, toMono } from "../engine/analysis/drop";
 import { AudioDecodeError, decodeAudio, type PcmAudio } from "../engine/media/audio-decode";
 import type { MediaRequest, MediaResponse } from "./media-protocol";
 
@@ -17,6 +17,13 @@ async function handle(request: MediaRequest): Promise<{ result: unknown; transfe
     case "detectDrop": {
       const pcm = await decodeAudio(request.args.file);
       return { result: detectDropTime(toMono(pcm.channels), pcm.sampleRate), transfer: [] };
+    }
+    case "bassEnvelope": {
+      const { file, range, fps } = request.args;
+      const pcm = await decodeAudio(file, range);
+      const duration = Math.min(range.duration, pcm.channels[0]!.length / pcm.sampleRate);
+      const envelope = buildBassEnvelope(toMono(pcm.channels), pcm.sampleRate, fps, duration);
+      return { result: { envelope, duration }, transfer: [envelope.buffer] };
     }
     case "detectDropPcm": {
       const { pcm } = request.args;

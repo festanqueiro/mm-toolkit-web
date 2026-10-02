@@ -75,6 +75,11 @@ export async function decodeAudioFile(file: Blob, range?: DecodeRange): Promise<
   }
 }
 
+/** Bass envelope for a snippet. Throws for codecs the Worker can't decode (preview then runs without bass). */
+export function bassEnvelope(file: Blob, range: DecodeRange, fps: number): Promise<{ envelope: Float64Array; duration: number }> {
+  return call("bassEnvelope", { file, range, fps });
+}
+
 export async function detectDrop(file: Blob): Promise<number> {
   try {
     return await call("detectDrop", { file });

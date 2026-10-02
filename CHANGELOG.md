@@ -6,6 +6,17 @@ policy in `CLAUDE.md` (patch by default, minor/major only when requested).
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-10-02
+
+### Added
+- Video Creator right column:
+  - Visual Effects stack: enable/disable, opacity/amount sliders and RPM. Reorder by dragging (mouse or touch) or with ↑/↓ on the handle.
+  - Layers: solid colour swatch or background image, plus overlay image. PNGs are decoded byte-exact.
+  - Post-Effects: mute original video sound (videos only) and video/audio fades.
+  - Output: export folder with permission status (Chrome/Edge) or Downloads (Safari/Firefox), video profile, frame rate, Quality and audio bitrate.
+- Live preview at up to 540 px: the full effect cascade, Layers and fades, playing along with the selected track's snippet and pulsing with its bass envelope.
+- Clear resets inputs, effects and output; saved effects and fades are restored on load.
+
 ## [0.1.5] - 2026-10-02
 
 ### Added

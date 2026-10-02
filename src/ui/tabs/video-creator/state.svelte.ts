@@ -3,6 +3,8 @@
  * Pure rules live in `engine/video-creator.ts`; this file wires them to files, the media
  * Worker and Web Audio.
  */
+import type { Image8 } from "../../../engine/effects/cpu/image";
+import { defaultEffectSettings, fromEffectsState, type EffectSettings } from "../../../engine/effects/settings";
 import { formatTimestamp, parseTimestamp } from "../../../engine/time";
 import {
   audioFilesFromFile,
@@ -13,14 +15,18 @@ import {
   mergeTrackRows,
   previewStatus,
   proposedStart,
+  OUTPUT_DEFAULTS,
   TIMESTAMPS_HINT,
+  type AudioBitrate,
+  type Quality,
   type TrackRow,
 } from "../../../engine/video-creator";
-import { trackIdentity } from "../../../io/file-ref";
+import { fileRefFromHandle, forgetRef, handleFor, queryPermission, requestPermission, trackIdentity, type FileRef } from "../../../io/file-ref";
+import { decodeImage } from "../../../io/image-decode";
 import type { Picked } from "../../../io/pick";
 import { probeVisual, type VisualProbe } from "../../../io/visual";
 import { decodeAudioFile, detectDrop } from "../../../workers/media-client";
-import { app, updateSetting } from "../../state.svelte";
+import { app, resetSettings, updateSetting } from "../../state.svelte";
 
 export type AudioSelection = { label: string; folder: boolean; files: File[] };
 
@@ -36,6 +42,29 @@ class VideoCreatorState {
   previewLoading = $state(false);
   /** Set when a job runs (render PR); disables inputs and stops previews. */
   running = $state(false);
+
+  // Visual Effects + Layers (the effect stack's state, desktop `EffectsPanel`).
+  effects = $state<EffectSettings>(defaultEffectSettings());
+  /** Raw (not deeply reactive): holds decoded pixels. Replace the object to update. */
+  layers = $state.raw<Record<LayerKind, LayerImage>>({ background: emptyLayer(), overlay: emptyLayer() });
+
+  // Post-Effects.
+  videoFade = $state(true);
+  audioFade = $state(true);
+  muteOriginal = $state(true);
+
+  // Output.
+  output = $state<FileRef | null>(null);
+  outputPermission = $state<PermissionState | "none">("none");
+  profile = $state(OUTPUT_DEFAULTS.profile);
+  fps = $state(OUTPUT_DEFAULTS.fps);
+  quality = $state<Quality>(OUTPUT_DEFAULTS.quality);
+  audioBitrate = $state<AudioBitrate>(OUTPUT_DEFAULTS.audioBitrate);
+
+  /** Registered by the live preview so a table ▶ stops it (only one audio preview at a time). */
+  stopLivePreview: (() => void) | null = null;
+
+  private restored = false;
 
   private filesByKey = new Map<string, File>();
   private player: AudioPreview | null = null;
@@ -126,6 +155,7 @@ class VideoCreatorState {
       return (error as Error).message;
     }
     this.stopPreview();
+    this.stopLivePreview?.();
     this.previewKey = key;
     this.previewLoading = true;
     this.timestampsStatus = previewStatus(file.name, start, row.duration);
@@ -153,7 +183,95 @@ class VideoCreatorState {
   get leadIn(): number {
     return app.settings["promo/drop_lead_in"];
   }
+
+  /** Restore saved effects, fades and the export folder once settings have loaded (desktop restores on start). */
+  restore(): void {
+    if (this.restored || !app.settingsLoaded) return;
+    this.restored = true;
+    const s = app.settings;
+    const raw = s["promo/effects_state"];
+    if (raw) {
+      try {
+        this.effects = fromEffectsState(JSON.parse(raw));
+        // Layer files aren't re-openable until input persistence lands; keep the settings, drop the refs.
+        this.effects.overlay.mediaPath = null;
+        this.effects.background.imagePath = null;
+      } catch {
+        // Malformed JSON: keep defaults (desktop ignores it too).
+      }
+    }
+    this.videoFade = s["promo/video_fade"];
+    this.audioFade = s["promo/audio_fade"];
+    this.muteOriginal = s["promo/mute_original_video_audio"];
+    this.output = s.output ?? s["general/default_output"];
+    void this.refreshOutputPermission();
+  }
+
+  /** Decode a Background or Overlay image (Pillow-like: exact PNG bytes, no EXIF rotation). */
+  async setLayerImage(kind: LayerKind, file: File | null): Promise<void> {
+    const token = ++this.layerTokens[kind];
+    this.layers = { ...this.layers, [kind]: { file, image: null, error: "", loading: !!file } };
+    if (!file) return;
+    try {
+      const image = await decodeImage(file);
+      if (token === this.layerTokens[kind]) this.layers = { ...this.layers, [kind]: { file, image, error: "", loading: false } };
+    } catch {
+      if (token === this.layerTokens[kind]) this.layers = { ...this.layers, [kind]: { file, image: null, error: "The selected image could not be read.", loading: false } };
+    }
+  }
+  private layerTokens: Record<LayerKind, number> = { background: 0, overlay: 0 };
+
+  /** Tier 1: pick a writable export folder (a persisted handle). */
+  async chooseOutput(): Promise<void> {
+    let handle: FileSystemDirectoryHandle;
+    try {
+      handle = await showDirectoryPicker({ id: "mm-promo-export", mode: "readwrite" });
+    } catch (error) {
+      if ((error as DOMException)?.name === "AbortError") return;
+      throw error;
+    }
+    const previous = this.output;
+    this.output = await fileRefFromHandle(handle);
+    this.outputPermission = await queryPermission(handle, "readwrite");
+    if (previous && previous.id !== app.settings["general/default_output"]?.id && previous.id !== app.settings.output?.id) await forgetRef(previous);
+  }
+
+  async reallowOutput(): Promise<void> {
+    const handle = await handleFor(this.output);
+    if (handle && (await requestPermission(handle, "readwrite"))) this.outputPermission = "granted";
+  }
+
+  async refreshOutputPermission(): Promise<void> {
+    const handle = await handleFor(this.output);
+    this.outputPermission = handle ? await queryPermission(handle, "readwrite") : "none";
+  }
+
+  /** Clear: inputs, effects and output back to defaults (desktop `clear`). The drop lead-in is kept. */
+  clear(): void {
+    this.stopPreview();
+    this.stopLivePreview?.();
+    this.audio = null;
+    this.rows = [];
+    this.filesByKey = new Map();
+    this.timestampsStatus = "";
+    void this.setVisual(null);
+    this.effects = defaultEffectSettings();
+    void this.setLayerImage("background", null);
+    void this.setLayerImage("overlay", null);
+    this.videoFade = this.audioFade = this.muteOriginal = true;
+    this.output = app.settings["general/default_output"];
+    void this.refreshOutputPermission();
+    this.profile = OUTPUT_DEFAULTS.profile;
+    this.fps = OUTPUT_DEFAULTS.fps;
+    this.quality = OUTPUT_DEFAULTS.quality;
+    this.audioBitrate = OUTPUT_DEFAULTS.audioBitrate;
+    void resetSettings(["music", "cover", "output", "promo/video_fade", "promo/audio_fade", "promo/mute_original_video_audio", "promo/effects_state"]);
+  }
 }
+
+export type LayerKind = "background" | "overlay";
+export type LayerImage = { file: File | null; image: Image8 | null; error: string; loading: boolean };
+const emptyLayer = (): LayerImage => ({ file: null, image: null, error: "", loading: false });
 
 /** Web Audio playback of a decoded snippet (sample-accurate, any decodable format). */
 class AudioPreview {

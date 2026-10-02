@@ -160,6 +160,13 @@ The desktop uses libx264 with **CRF 14–30 (default 18)** and **preset ultrafas
 
 ## Live preview (new)
 
+Implemented as a **Preview** card at the top of the right column, outside the accordion so it stays visible while effects are edited. It has ▶/■, a position slider and, with several tracks, a Track picker.
+
+- Effects run through the same `GlEffectRenderer` as the render, and bass strength comes from the snippet's envelope, computed in the Worker.
+- Layer fitting uses the browser's 2D canvas scaling at preview size, not the Pillow-exact CPU path. That's fast, and identical to the eye.
+- Pixel-sized effects (VHS channel shift, scanlines) look slightly stronger on the smaller canvas.
+- Original video audio isn't mixed into the preview yet.
+
 - A preview canvas shows the visual with the full cascade, Layers and fades applied. It plays along with the selected row's audio snippet.
 - Uses the same GL effect code as the renderer, at reduced resolution (e.g. longest edge 540 px). Bass strength comes from the **precomputed** snippet envelope (not a live `AnalyserNode`), so preview equals render.
 - Updates live as effect settings change. Stops when a job starts.
