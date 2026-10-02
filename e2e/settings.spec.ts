@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { waitForStored } from "./helpers";
 
 test("naming templates validate live and persist across reloads", async ({ page }) => {
   await page.goto("/#/settings");
@@ -15,6 +16,7 @@ test("naming templates validate live and persist across reloads", async ({ page 
     "Invalid clip naming template. Use {source}, {title}, and {number}.",
   );
 
+  await waitForStored(page, "general/promo_naming", "{number:02d} {track}");
   await page.reload();
   await expect(page.getByLabel("Generated video filename")).toHaveValue("{number:02d} {track}");
 });
@@ -31,6 +33,7 @@ test("theme setting applies and persists", async ({ page }) => {
   await page.goto("/#/settings");
   await page.getByLabel("Theme").selectOption("dark");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await waitForStored(page, "web/theme", "dark");
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await page.getByLabel("Theme").selectOption("system");

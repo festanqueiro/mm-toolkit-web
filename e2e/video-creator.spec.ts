@@ -1,5 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { expect, test, type Page } from "@playwright/test";
+import { waitForStored } from "./helpers";
 
 const golden = (name: string) => fileURLToPath(new URL(`../fixtures/golden/${name}`, import.meta.url));
 const media = (name: string) => fileURLToPath(new URL(`../fixtures/media/${name}`, import.meta.url));
@@ -66,6 +67,7 @@ test("lead-in is remembered and applied", async ({ page }) => {
   await page.getByRole("button", { name: "Analyze" }).click();
   await expect(page.getByLabel("Start for track 1")).toHaveValue("00:00:25");
 
+  await waitForStored(page, "promo/drop_lead_in", 5);
   await page.reload();
   await choose(page, "Choose File…", golden("audio/drop-30s-stereo.wav"));
   await openTimestamps(page);

@@ -185,7 +185,8 @@ export class LivePreview {
     this.stop();
     if (!this.scene) return;
     this.audio ??= new AudioContext();
-    if (this.audio.state === "suspended") await this.audio.resume();
+    // `resume()` can stay pending forever without an output device; don't wait on it.
+    if (this.audio.state === "suspended") await Promise.race([this.audio.resume(), new Promise((r) => setTimeout(r, 300))]);
     const frames = pcm.channels[0]!.length;
     const planes = pcm.channels.map((c) => c.slice());
     if (audioFade) applyAudioFade(planes, frames, pcm.sampleRate, fadeLength(params.duration));
