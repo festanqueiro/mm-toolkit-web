@@ -14,4 +14,5 @@ export type RenderEvent =
   | { type: "warn"; message: string }
   | { type: "done"; outputs: OutputRef[] }
   | { type: "cancelled" }
-  | { type: "failed"; message: string; details: string };
+  /** `undecodable`: the Worker can't decode the source's audio; the page may decode it (Web Audio) and retry. */
+  | { type: "failed"; message: string; details: string; undecodable?: { sampleRate: number; numberOfChannels: number } };

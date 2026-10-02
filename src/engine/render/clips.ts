@@ -7,6 +7,8 @@
 import {
   ALL_FORMATS,
   AdtsOutputFormat,
+  AudioSample,
+  AudioSampleSource,
   BlobSource,
   BufferTarget,
   canEncodeAudio,
@@ -27,7 +29,8 @@ import {
   type OutputFormat,
 } from "mediabunny";
 import { clipOutputFormat, clipOutputName, type ClipFormat, type ClipRequest } from "../clips";
-import { decodeAiff, encodeAiff24 } from "../media/aiff";
+import { decodeAiff, encodeAiff24, type PcmAudio } from "../media/aiff";
+import { decodesHere } from "../media/audio-decode";
 import { parseStreamInfo, registerFlacDecoder } from "../media/flac-decoder";
 import { mediaKind } from "../media-kind";
 import type { ConflictPolicy } from "../naming";
@@ -35,7 +38,26 @@ import { videoBitrate } from "../video-creator";
 import type { OutputRef, OutputSink } from "../../io/sink";
 import { CancelledError } from "./cancel";
 
-export type ClipJob = { source: File; clips: ClipRequest[]; naming: string; conflict: ConflictPolicy };
+/**
+ * `pcm`: the whole source decoded at its native rate by the page (Web Audio), for audio this
+ * engine's Worker can't decode (see `UndecodableAudioError`).
+ */
+export type ClipJob = { source: File; clips: ClipRequest[]; naming: string; conflict: ConflictPolicy; pcm?: PcmAudio };
+
+/**
+ * The source's audio doesn't decode in this Worker. Carries what the page needs to decode it
+ * with Web Audio at the native rate and retry with `ClipJob.pcm`.
+ */
+export class UndecodableAudioError extends Error {
+  constructor(
+    name: string,
+    codec: string | null,
+    readonly sampleRate: number,
+    readonly numberOfChannels: number,
+  ) {
+    super(`${name} uses a codec (${codec ?? "unknown"}) this browser can't decode.`);
+  }
+}
 
 export type ClipCallbacks = {
   progress: (percent: number, status: string) => void;
@@ -68,9 +90,13 @@ export async function cutClipsJob(job: ClipJob, sink: OutputSink, cb: ClipCallba
     const status = `Creating clip ${index + 1} of ${n}`;
     cb.progress(Math.round((index / n) * 100), status);
     try {
-      const bytes = await cutClip(job.source, clip, index, format, cb, (fraction) => {
+      const onFraction = (fraction: number) => {
         cb.progress(Math.round(((index + Math.min(1, fraction)) / n) * 100), status);
-      });
+      };
+      const bytes =
+        job.pcm && format !== "mp4" && format !== "aiff"
+          ? await cutPcm(job.pcm, clip, index, job.source.name, format, cb, onFraction)
+          : await cutClip(job.source, clip, index, format, cb, onFraction);
       const writer = (await sink.create(name)).getWriter();
       await writer.write(bytes);
       await writer.close();
@@ -178,43 +204,89 @@ async function videoOptions(input: Input, name: string, cb: ClipCallbacks): Prom
   if (codec !== "avc") cb.warn(`This browser can't encode H.264 here, so the video uses ${codec.toUpperCase()} in MP4.`);
   const odd = width !== video.displayWidth || height !== video.displayHeight;
   const audio = await input.getPrimaryAudioTrack();
-  if (audio) await ensureEncoder("aac");
-  if (audio && !(await audio.canDecode())) cb.warn(`${name} has audio this browser can't decode, so the clips are silent.`);
+  const audioOk = !!audio && (await decodesHere(audio));
+  if (audioOk) await ensureEncoder("aac");
+  else if (audio) cb.warn(`${name} has audio this browser can't decode, so the clips are silent.`);
   return {
     video: { codec, bitrate, forceTranscode: true, ...(odd ? { width, height, fit: "fill" as const } : {}) },
-    audio: audio && (await audio.canDecode()) ? { codec: "aac", bitrate: VIDEO_AUDIO_BITRATE, forceTranscode: true } : { discard: true },
+    audio: audioOk ? { codec: "aac", bitrate: VIDEO_AUDIO_BITRATE, forceTranscode: true } : { discard: true },
   };
 }
 
-/** Audio keeps its format, re-encoded with the desktop's settings; video streams are dropped. */
-async function audioOptions(input: Input, name: string, format: Exclude<ClipFormat, "mp4" | "aiff">): Promise<TrackOptions> {
-  const track = await input.getPrimaryAudioTrack();
-  if (!track) throw new Error(`${name} contains no usable audio.`);
-  const audio: ConversionAudioOptions = { forceTranscode: true };
+type AudioFormat = Exclude<ClipFormat, "mp4" | "aiff">;
+
+/** The desktop's codec settings per audio format (OGG: Opus until ADR-003). */
+function audioEncoding(format: AudioFormat): { codec: AudioCodec; bitrate?: number } {
   switch (format) {
     case "mp3":
-      Object.assign(audio, { codec: "mp3", bitrate: AUDIO_BITRATE });
-      break;
+      return { codec: "mp3", bitrate: AUDIO_BITRATE };
     case "m4a":
     case "aac":
-      Object.assign(audio, { codec: "aac", bitrate: AUDIO_BITRATE });
-      break;
+      return { codec: "aac", bitrate: AUDIO_BITRATE };
     case "wav":
-      audio.codec = "pcm-s24";
-      break;
-    case "flac": {
-      audio.codec = "flac";
-      // FFmpeg keeps a 16-bit FLAC 16-bit; the encoder picks 16 vs 24 from the sample format.
-      const config = await track.getDecoderConfig().catch(() => null);
-      if (parseStreamInfo(config?.description)?.bitsPerSample === 16) audio.sampleFormat = "s16";
-      break;
-    }
+      return { codec: "pcm-s24" };
+    case "flac":
+      return { codec: "flac" };
     case "ogg":
-      Object.assign(audio, { codec: "opus", bitrate: OGG_OPUS_BITRATE });
-      break;
+      return { codec: "opus", bitrate: OGG_OPUS_BITRATE };
+  }
+}
+
+/** Audio keeps its format, re-encoded with the desktop's settings; video streams are dropped. */
+async function audioOptions(input: Input, name: string, format: AudioFormat): Promise<TrackOptions> {
+  const track = await input.getPrimaryAudioTrack();
+  if (!track) throw new Error(`${name} contains no usable audio.`);
+  if (!(await decodesHere(track))) throw new UndecodableAudioError(name, track.codec, track.sampleRate, track.numberOfChannels);
+  const audio: ConversionAudioOptions = { forceTranscode: true, ...audioEncoding(format) };
+  if (format === "flac") {
+    // FFmpeg keeps a 16-bit FLAC 16-bit; the encoder picks 16 vs 24 from the sample format.
+    const config = await track.getDecoderConfig().catch(() => null);
+    if (parseStreamInfo(config?.description)?.bitsPerSample === 16) audio.sampleFormat = "s16";
   }
   await ensureEncoder(audio.codec!);
   return { video: { discard: true }, audio };
+}
+
+/** Encode `[start, start + duration)` of page-decoded PCM (the Web Audio fallback). */
+async function cutPcm(
+  pcm: PcmAudio,
+  clip: ClipRequest,
+  index: number,
+  name: string,
+  format: AudioFormat,
+  cb: ClipCallbacks,
+  onFraction: (fraction: number) => void,
+): Promise<Uint8Array> {
+  const frames = pcm.channels[0]?.length ?? 0;
+  const from = Math.round(clip.start * pcm.sampleRate);
+  if (from >= frames) throw pastEnd(index, name);
+  const to = Math.min(frames, Math.round((clip.start + clip.duration) * pcm.sampleRate));
+  const encoding = audioEncoding(format);
+  await ensureEncoder(encoding.codec);
+  const output = new Output({ format: outputFormat(format), target: new BufferTarget() });
+  const source = new AudioSampleSource(encoding);
+  output.addAudioTrack(source);
+  await output.start();
+  try {
+    // One-second chunks keep progress and cancel responsive.
+    const chunk = pcm.sampleRate;
+    for (let at = from; at < to; at += chunk) {
+      if (cb.cancelled()) throw new CancelledError();
+      const end = Math.min(to, at + chunk);
+      const data = new Float32Array((end - at) * pcm.channels.length);
+      pcm.channels.forEach((plane, c) => data.set(plane.subarray(at, end), c * (end - at)));
+      const sample = new AudioSample({ data, format: "f32-planar", numberOfChannels: pcm.channels.length, sampleRate: pcm.sampleRate, timestamp: (at - from) / pcm.sampleRate });
+      await source.add(sample);
+      sample.close();
+      onFraction((end - from) / (to - from));
+    }
+    source.close();
+    await output.finalize();
+  } catch (error) {
+    await output.cancel().catch(() => {});
+    throw error;
+  }
+  return new Uint8Array(output.target.buffer!);
 }
 
 /** Turn Mediabunny's discard reasons for the track we need into the user-facing error. */

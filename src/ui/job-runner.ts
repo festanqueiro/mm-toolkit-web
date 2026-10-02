@@ -31,7 +31,7 @@ export function runJob<J>(worker: Worker, request: JobRequest<J>, on: JobHandler
       else if (e.type === "warn") on.warn(e.message);
       else if (e.type === "done") resolve(e.outputs);
       else if (e.type === "cancelled") resolve(null);
-      else reject(Object.assign(new Error(e.message), { details: e.details }));
+      else reject(Object.assign(new Error(e.message), { details: e.details, undecodable: e.undecodable }));
     };
     worker.onerror = (event) => reject(new Error(event.message || "The worker stopped unexpectedly."));
     worker.postMessage(request);

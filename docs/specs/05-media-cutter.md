@@ -72,7 +72,8 @@ The job runs in `workers/cut.worker.ts` (`engine/render/clips.ts`). Every clip i
 - **WAV**: `pcm-s24` through Mediabunny's WAV muxer.
 - **AIFF**: Mediabunny has no AIFF demuxer, so AIFF is read, sliced and written (24-bit BE) in TS (`engine/media/aiff.ts`).
 - **AAC/M4A**: WebCodecs `AudioEncoder` where supported, else the WASM `@mediabunny/aac-encoder` (Firefox).
-- **MP3**: WASM `@mediabunny/mp3-encoder` (LAME), 320 kbps. **FLAC**: WASM `@mediabunny/flac-encoder`; a 16-bit source stays 16-bit (FFmpeg keeps the source depth), deeper sources become 24-bit. No browser encodes either natively.
+- **MP3**: WASM `@mediabunny/mp3-encoder` (LAME, like desktop FFmpeg), 320 kbps. **FLAC**: WASM `@mediabunny/flac-encoder`; a 16-bit source stays 16-bit (FFmpeg keeps the source depth), deeper sources become 24-bit. Always WASM, even where a native encoder is claimed: WebKitGTK's GStreamer MP3/FLAC encoders write short or broken files.
+- **Undecodable audio**: before cutting, a runtime probe decodes the first sample (`decodesHere`, 4 s timeout), because some engines claim support and then hang (WebKitGTK's Vorbis). If it fails, the Worker reports the native rate and channel count; the page decodes the whole file with Web Audio at that rate (no resampling) and reruns the job from PCM. Video sources with undecodable audio produce silent clips with a warning.
 - **FLAC decode** uses a TS decoder (`engine/media/flac-decoder.ts`) in every engine: WebKit claims WebCodecs FLAC support but fails at runtime.
 - **Video**: H.264 at the "High" bits-per-pixel preset from [04](04-video-creator.md#output-and-encoding) (source size and frame rate), since desktop exposes no quality control here. AAC 256 kbps. Where H.264 can't be encoded, VP9/AV1 in MP4 with a warning.
 - **Progress**: `round((i + fraction) / n * 100)`, where `fraction` is the conversion's progress through the clip.

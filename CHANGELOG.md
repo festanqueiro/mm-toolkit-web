@@ -16,6 +16,7 @@ policy in `CLAUDE.md` (patch by default, minor/major only when requested).
   - Naming template and conflict policy, export folder (Chrome/Edge) or Downloads/ZIP, progress, Cancel, the "Clip creation failed" dialog, History records and the "Clips finished" notification.
 - WASM MP3, FLAC and AAC encoders (Mediabunny extensions), loaded only when the browser has no native encoder.
 - A pure-TS FLAC decoder, bit-exact and used in every browser (WebKit's WebCodecs FLAC decoder fails at runtime).
+- A runtime decode probe: audio that an engine claims to decode but doesn't (WebKitGTK's Vorbis hangs) falls back to Web Audio at the native rate, in the Cutter and in Video Creator decoding.
 
 ### Changed
 - Shared building blocks for tools: export folder, drop zone, job footer and the Worker job runner (the Video Creator now uses them too).

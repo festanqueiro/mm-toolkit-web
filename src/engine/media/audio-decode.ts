@@ -5,7 +5,7 @@
  * Mediabunny (WebCodecs `AudioDecoder` for compressed codecs).
  */
 
-import { ALL_FORMATS, AudioSampleSink, BlobSource, Input } from "mediabunny";
+import { ALL_FORMATS, AudioSampleSink, BlobSource, Input, type InputAudioTrack } from "mediabunny";
 import { extensionOf } from "../media-kind";
 import { decodeAiff, isAiff, type PcmAudio } from "./aiff";
 import { registerFlacDecoder } from "./flac-decoder";
@@ -53,6 +53,33 @@ function slice(pcm: PcmAudio, range?: DecodeRange): PcmAudio {
   return { sampleRate: pcm.sampleRate, channels: pcm.channels.map((c) => c.slice(from, to)) };
 }
 
+/**
+ * Whether `track` really decodes in this engine: `canDecode()`, then the first sample must
+ * arrive within `timeoutMs`. Some engines report support and then fail or never produce a
+ * sample (WebKitGTK's GStreamer Vorbis decoder hangs), which `canDecode()` can't reveal.
+ */
+export async function decodesHere(track: InputAudioTrack, timeoutMs = 4000): Promise<boolean> {
+  if (!(await track.canDecode())) return false;
+  const samples = new AudioSampleSink(track).samples();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      samples.next().then(
+        (result) => {
+          result.value?.close();
+          return !result.done;
+        },
+        () => false,
+      ),
+      new Promise<boolean>((resolve) => (timer = setTimeout(() => resolve(false), timeoutMs))),
+    ]);
+  } finally {
+    clearTimeout(timer);
+    // Don't await: a hung decoder may never settle.
+    void samples.return(undefined).catch(() => {});
+  }
+}
+
 async function decodeWithMediabunny(blob: Blob, range?: DecodeRange): Promise<PcmAudio> {
   const input = new Input({ source: new BlobSource(blob), formats: ALL_FORMATS });
   try {
@@ -63,7 +90,7 @@ async function decodeWithMediabunny(blob: Blob, range?: DecodeRange): Promise<Pc
       throw new AudioDecodeError("could not be read", "unreadable");
     }
     if (!track) throw new AudioDecodeError("contains no usable audio", "empty");
-    if (!(await track.canDecode())) throw new AudioDecodeError(`uses a codec (${track.codec ?? "unknown"}) this browser can't decode`, "unsupported");
+    if (!(await decodesHere(track))) throw new AudioDecodeError(`uses a codec (${track.codec ?? "unknown"}) this browser can't decode`, "unsupported");
     const sampleRate = track.sampleRate;
     const count = track.numberOfChannels;
     const start = range?.start ?? 0;

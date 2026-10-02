@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { decodeAiff, encodeAiff24 } from "../src/engine/media/aiff";
 import { parseStreamInfo } from "../src/engine/media/flac-decoder";
-import { cutClipsJob } from "../src/engine/render/clips";
+import { cutClipsJob, UndecodableAudioError } from "../src/engine/render/clips";
 import { CancelledError } from "../src/engine/render/cancel";
 import { MemorySink } from "../src/io/sink";
 
@@ -91,5 +91,40 @@ describe("cutClipsJob (AIFF path, no WebCodecs needed)", () => {
     expect(await cutClipsJob(job, sink, noop)).toHaveLength(1);
     expect(await cutClipsJob(job, sink, noop)).toEqual([]);
     await expect(cutClipsJob(job, sink, { ...noop, cancelled: () => true })).rejects.toBeInstanceOf(CancelledError);
+  });
+});
+
+describe("cutClipsJob: audio the Worker can't decode", () => {
+  it("reports the native rate and channels so the page can decode and retry", async () => {
+    // Node has no WebCodecs, so MP3 can't be decoded here: the same path WebKitGTK's Vorbis takes.
+    const source = new File([readFileSync(fixture("tone-4s.mp3"))], "tone-4s.mp3");
+    const error = await cutClipsJob({ source, clips: [{ title: "", start: 0, duration: 1 }], naming: "{title}", conflict: "rename" }, new MemorySink(), noop).catch((e) => e);
+    expect(error).toBeInstanceOf(UndecodableAudioError);
+    expect(error).toMatchObject({ message: "tone-4s.mp3 uses a codec (mp3) this browser can't decode.", sampleRate: 44_100, numberOfChannels: 2 });
+  });
+
+  it("encodes clips from page-decoded PCM (24-bit WAV here)", async () => {
+    const rate = 8000;
+    const ramp = Float32Array.from({ length: 4 * rate }, (_, i) => (i % 200) / 400);
+    const pcm = { sampleRate: rate, channels: [ramp, ramp.map((v) => -v)] };
+    const progress: number[] = [];
+    const [out] = await cutClipsJob(
+      { source: new File([], "set.wav"), clips: [{ title: "", start: 1, duration: 2.5 }], naming: "{title}", conflict: "rename", pcm },
+      new MemorySink(),
+      { ...noop, progress: (p) => progress.push(p) },
+    );
+    const bytes = new Uint8Array(await out!.file!.arrayBuffer());
+    const view = new DataView(bytes.buffer);
+    expect(out!.name).toBe("Clip 01.wav");
+    expect(view.getUint16(22, true)).toBe(2); // channels
+    expect(view.getUint32(24, true)).toBe(rate);
+    expect(view.getUint16(34, true)).toBe(24);
+    const dataBytes = bytes.length - 44;
+    expect(dataBytes / 6).toBe(2.5 * rate);
+    // First frame = source sample at 1 s, left/right, 24-bit LE.
+    const s24 = (at: number) => ((view.getUint8(at + 2) << 24) | (view.getUint8(at + 1) << 16) | (view.getUint8(at) << 8)) >> 8;
+    expect(s24(44) / 8388608).toBeCloseTo(ramp[rate]!, 5);
+    expect(s24(47) / 8388608).toBeCloseTo(-ramp[rate]!, 5);
+    expect(progress.at(-1)).toBe(100);
   });
 });

@@ -8,6 +8,7 @@ import { formatTimestamp } from "../../../engine/time";
 import type { FileRef } from "../../../io/file-ref";
 import { deliverStaged } from "../../../io/deliver";
 import { probeSource } from "../../../io/media-probe";
+import { decodeAtNativeRate } from "../../../workers/media-client";
 import { clearAllStaging, type OutputRef } from "../../../io/sink";
 import { addHistory, historyId, localTimestamp } from "../../../storage/history";
 import type { CutRequest } from "../../../workers/render-protocol";
@@ -110,21 +111,24 @@ class CutterState {
     try {
       const handle = tier1 ? await this.folder.current() : null;
       if (tier1 && !handle) throw new Error("Choose a writable export folder.");
-      const worker = new Worker(new URL("../../../workers/cut.worker.ts", import.meta.url), { type: "module", name: "cut" });
-      this.worker = worker;
-      const request: CutRequest = {
+      let job: CutRequest & { type: "start" } = {
         type: "start",
         job: { source: source.file, clips, naming: s["general/clip_naming"], conflict: s["general/conflict_policy"] },
         destination: handle ? { kind: "directory", handle } : { kind: "staging", jobId },
       };
-      const outputs = await runJob(worker, request, {
-        progress: (percent, status) => {
-          if (!this.cancelling) this.progress = { percent, status };
-        },
-        warn: (message) => {
-          if (!this.warnings.includes(message)) this.warnings = [...this.warnings, message];
-        },
-      });
+      let outputs: OutputRef[] | null;
+      try {
+        outputs = await this.runWorker(job);
+      } catch (error) {
+        // The Worker can't decode this audio here: decode it on the page and retry from PCM.
+        const info = (error as { undecodable?: { sampleRate: number; numberOfChannels: number } }).undecodable;
+        if (!info) throw error;
+        const pcm = await decodeAtNativeRate(source.file, info.sampleRate, info.numberOfChannels).catch(() => {
+          throw error;
+        });
+        job = { ...job, job: { ...job.job, pcm } };
+        outputs = this.cancelling ? null : await this.runWorker(job);
+      }
       if (outputs === null) {
         this.progress = { percent: this.progress?.percent ?? 0, status: CLIP_PROGRESS.cancelled };
         return;
@@ -143,6 +147,20 @@ class CutterState {
       this.worker?.terminate();
       this.worker = null;
     }
+  }
+
+  private runWorker(request: CutRequest): Promise<OutputRef[] | null> {
+    this.worker?.terminate();
+    const worker = new Worker(new URL("../../../workers/cut.worker.ts", import.meta.url), { type: "module", name: "cut" });
+    this.worker = worker;
+    return runJob(worker, request, {
+      progress: (percent, status) => {
+        if (!this.cancelling) this.progress = { percent, status };
+      },
+      warn: (message) => {
+        if (!this.warnings.includes(message)) this.warnings = [...this.warnings, message];
+      },
+    });
   }
 
   cancel(): void {

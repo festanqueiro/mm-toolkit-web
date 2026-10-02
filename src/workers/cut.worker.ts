@@ -5,6 +5,7 @@ import { createStagingSink, DirectorySink, MemorySink, type OutputSink } from ".
 import type { CutRequest, RenderEvent } from "./render-protocol";
 
 let cancelRequested = false;
+let undecodable: (new (...args: never[]) => Error & { sampleRate: number; numberOfChannels: number }) | null = null;
 const post = (event: RenderEvent) => self.postMessage(event);
 
 self.onmessage = async (event: MessageEvent<CutRequest>) => {
@@ -22,7 +23,8 @@ self.onmessage = async (event: MessageEvent<CutRequest>) => {
     // Loaded lazily so Mediabunny lands in a shared chunk rather than this entry module: the
     // WASM encoder chunks import it, and WebKit re-evaluates an imported worker entry as a
     // second instance, so encoders registered there would be invisible to the conversion.
-    const { cutClipsJob } = await import("../engine/render/clips");
+    const { cutClipsJob, UndecodableAudioError } = await import("../engine/render/clips");
+    undecodable = UndecodableAudioError;
     const outputs = await cutClipsJob(request.job, sink, {
       progress: (percent, status) => post({ type: "progress", percent, status }),
       warn: (message) => post({ type: "warn", message }),
@@ -33,7 +35,8 @@ self.onmessage = async (event: MessageEvent<CutRequest>) => {
     if (error instanceof CancelledError) post({ type: "cancelled" });
     else {
       const err = error instanceof Error ? error : new Error(String(error));
-      post({ type: "failed", message: err.message, details: err.stack ?? "" });
+      const fallback = undecodable && error instanceof undecodable ? { sampleRate: error.sampleRate, numberOfChannels: error.numberOfChannels } : undefined;
+      post({ type: "failed", message: err.message, details: err.stack ?? "", undecodable: fallback });
     }
   }
 };
