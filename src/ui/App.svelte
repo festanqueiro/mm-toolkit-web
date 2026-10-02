@@ -4,6 +4,7 @@
   import About from "./tabs/About.svelte";
   import Placeholder from "./tabs/Placeholder.svelte";
   import Settings from "./tabs/Settings.svelte";
+  import VideoCreator from "./tabs/video-creator/VideoCreator.svelte";
   import { initApp } from "./state.svelte";
 
   initApp();
@@ -34,6 +35,8 @@
   <main class="page">
     {#if current.path === "about"}
       <About />
+    {:else if current.path === "video-creator"}
+      <VideoCreator />
     {:else if current.path === "settings"}
       <Settings />
     {:else}

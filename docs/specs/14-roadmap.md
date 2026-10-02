@@ -24,7 +24,7 @@
 
 ## Phase 2 — Video Creator (highest value)
 
-- [ ] Inputs, per-track table, preview playback, drop detection dialog.
+- [x] Inputs, per-track table, preview playback, drop detection dialog. (Inputs aren't persisted yet; that lands with the render pipeline, since desktop saves them when generation starts.)
 - [x] GL effects + Layers + fades. GL ↔ CPU parity tests (Chromium/WebKit/Firefox: blur, rotate and overlay byte-equal to the golden frames).
 - [ ] **Live preview**.
 - [ ] Render pipeline + batch + naming/conflicts + cancel/cleanup.

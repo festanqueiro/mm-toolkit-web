@@ -60,6 +60,22 @@ Two equal columns of **accordions**. Within each column, opening one section clo
 - **Visual**: an image (`.png .jpg .jpeg .webp .tif .tiff`) or a video (`.mp4 .mov .m4v .mkv .avi .webm`). Image validation must actually decode it. Video validation must decode its first frame.
 - **Picker start location**: desktop opens the visual, background and overlay pickers in the audio file's folder. Web (Chromium): pass `startIn` = the audio `FileSystemHandle`. Other browsers: no equivalent, so skip.
 
+### Implementation notes (web)
+
+- **Pickers.** A transient `<input type=file>` (`webkitdirectory` for folders) works in every engine. Folder drops read the dropped directory's direct children. Handle-based pickers (persistable on Chromium) arrive with input persistence.
+- **Decoding** (`engine/media/audio-decode.ts`, in `workers/media.worker.ts`):
+  - Native sample rate, stereo-ised and 16-bit quantised like the desktop's FFmpeg step.
+  - Mediabunny for WAV/MP3/AAC/M4A/FLAC/OGG, plus a TS reader for AIFF/AIFF-C (Mediabunny has no AIFF demuxer).
+  - If WebCodecs can't decode a codec, the client falls back to the main thread's `decodeAudioData`, resampled to 44.1 kHz. Drop times on that path can differ slightly.
+- **Visual validation** (`io/visual.ts`):
+  - Images: `createImageBitmap`.
+  - Videos: Mediabunny's first frame via WebCodecs.
+  - Same messages as desktop.
+  - Note: WebKit/Firefox on macOS refused a 64×48 VP9 test clip (320×240 decodes fine), so the fixture is 320×240.
+- **Export folder requirement:**
+  - Tier 2 browsers export to Downloads, so they never show "choose a writable export folder".
+  - Tier 1 needs a folder. For now that's the Settings default; the Output section's picker comes next.
+
 ## Per-track timing
 
 - Each row's **Start** accepts `parseTimestamp` formats ([10](10-file-io-and-naming.md#timestamps)). **Duration** is seconds.
