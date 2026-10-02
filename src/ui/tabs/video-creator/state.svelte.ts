@@ -42,7 +42,9 @@ import type { Picked } from "../../../io/pick";
 import { probeVisual, type VisualProbe } from "../../../io/visual";
 import { decodeAudioFile, detectDrop } from "../../../workers/media-client";
 import { jobRecorded } from "../../history.svelte";
+import type { AvailableOutput } from "../../../io/history-outputs";
 import { historyOutputs, notifyFinished, runJob } from "../../job-runner";
+import { jobResults, savedToLabel } from "../../job-results";
 import { OutputFolder } from "../../output-folder.svelte";
 import { app, resetSettings, updateSetting } from "../../state.svelte";
 
@@ -87,6 +89,9 @@ class VideoCreatorState {
   private savedRows: TrackRow[] = [];
   /** The last finished job's History id (the progress label links to it). */
   lastJobId = $state<string | null>(null);
+  /** The last job's files, playable in the rail (cleared by Clear and when a job starts). */
+  results = $state.raw<AvailableOutput[]>([]);
+  savedTo = $state("");
   warnings = $state<string[]>([]);
   failure = $state<{ message: string; details: string } | null>(null);
   cancelling = $state(false);
@@ -307,6 +312,7 @@ class VideoCreatorState {
     this.cancelling = false;
     this.failure = null;
     this.warnings = [];
+    this.results = [];
     this.progress = { percent: 0, status: "Preparing…", outputs: 0 };
     const s = app.settings;
     const effects = $state.snapshot(this.effects) as EffectSettings;
@@ -357,7 +363,9 @@ class VideoCreatorState {
       }
       // Staged copies stay until the next job or app load: deleting them now would cancel the download.
       if (!handle && outputs.length) await deliverStaged(outputs, { zip: s["web/zip_batches"], tool: "Video Creator" });
-      await this.record(jobId, effects, options, outputs, !!handle);
+      const record = await this.record(jobId, effects, options, outputs, !!handle);
+      this.results = await jobResults(outputs, record).catch(() => []);
+      this.savedTo = savedToLabel(!!handle, this.folder.ref?.name);
       this.progress = { percent: 100, status: `Finished ${outputs.length} video${outputs.length === 1 ? "" : "s"}`, outputs: outputs.length };
       notifyFinished("Promo video", outputs.length);
     } catch (error) {
@@ -379,34 +387,37 @@ class VideoCreatorState {
     this.worker?.postMessage({ type: "cancel" } satisfies RenderRequest);
   }
 
-  private async record(id: string, effects: EffectSettings, options: { start: number; duration: number }[], outputs: OutputRef[], directory: boolean) {
+  private async record(id: string, effects: EffectSettings, options: { start: number; duration: number }[], outputs: OutputRef[], directory: boolean): Promise<Record<string, unknown>> {
     const ref = (f: File | null | undefined) => (f ? { name: f.name, size: f.size, lastModified: f.lastModified } : null);
+    const record = {
+      id,
+      tool: "promo" as const,
+      created: localTimestamp(),
+      source: this.audio ? { name: this.audio.label, kind: this.audio.folder ? "directory" : "file" } : null,
+      cover: ref(this.visualFile),
+      output: directory ? $state.snapshot(this.folder.ref) : { name: "Downloads" },
+      bass_effect: effects.bass_blur.enabled,
+      effects: toEffectsState(effects),
+      video_fade: this.videoFade,
+      audio_fade: this.audioFade,
+      mute_original_video_audio: this.muteOriginal,
+      tracks: this.rows.map((row, i) => ({ path: ref(this.filesByKey.get(row.key)), start: options[i]!.start, duration: options[i]!.duration })),
+      fps: this.fps,
+      profile: PROFILES[this.profile]?.size ?? null,
+      quality: this.quality,
+      audio_bitrate: this.audioBitrate,
+      outputs: historyOutputs(outputs),
+    };
     try {
-      await addHistory({
-        id,
-        tool: "promo",
-        created: localTimestamp(),
-        source: this.audio ? { name: this.audio.label, kind: this.audio.folder ? "directory" : "file" } : null,
-        cover: ref(this.visualFile),
-        output: directory ? $state.snapshot(this.folder.ref) : { name: "Downloads" },
-        bass_effect: effects.bass_blur.enabled,
-        effects: toEffectsState(effects),
-        video_fade: this.videoFade,
-        audio_fade: this.audioFade,
-        mute_original_video_audio: this.muteOriginal,
-        tracks: this.rows.map((row, i) => ({ path: ref(this.filesByKey.get(row.key)), start: options[i]!.start, duration: options[i]!.duration })),
-        fps: this.fps,
-        profile: PROFILES[this.profile]?.size ?? null,
-        quality: this.quality,
-        audio_bitrate: this.audioBitrate,
-        outputs: historyOutputs(outputs),
-      });
+      await addHistory(record);
       this.lastJobId = id;
       jobRecorded(id);
     } catch {
       // History is best effort (storage may be unavailable).
     }
+    return record;
   }
+
 
   /** Clear: inputs, effects and output back to defaults (desktop `clear`). The drop lead-in is kept. */
   clear(): void {
@@ -415,6 +426,7 @@ class VideoCreatorState {
     this.savedRows = [];
     this.progress = null;
     this.warnings = [];
+    this.results = [];
     this.stopPreview();
     this.stopLivePreview?.();
     this.audio = null;

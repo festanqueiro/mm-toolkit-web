@@ -12,7 +12,8 @@
 
   // Object URLs for the current results; revoked when results change or the page unmounts.
   $effect(() => {
-    const list = results;
+    // One row per name: with the "Overwrite" policy two outputs can share a name, and the last one is on disk.
+    const list = [...new Map(results.map((result) => [result.name, result])).values()];
     let live = true;
     const made: { name: string; url: string; size: number; video: boolean }[] = [];
     void (async () => {

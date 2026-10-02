@@ -4,21 +4,18 @@ Port of `ui/video_creator.py` + `core.generate_videos` / `core.render_track`. De
 
 ## Layout
 
-Two equal columns of **accordions**. Within each column, opening one section closes the others (desktop `Accordion`). A collapsed section shrinks to its header height.
+The shared tool layout (spec [09 › Tool layout](09-app-shell-and-about.md#tool-layout-web-redesign-2026-10-02)). **Deviation from desktop**: desktop used two equal columns of accordions; the web shows every section open, in a setup column and an output rail.
 
-**Left column**
+**Setup column** (sections, in order)
 
-1. **Input** (expanded by default)
-   - **Audio**: path row with **Choose File…** and **Choose Folder…**. Status line below.
-   - **Image or video**: path row with **Choose…**, a 104×104 thumbnail (94×94 image, aspect kept; a video shows its first frame), and a status line.
-2. **Audio timestamps** (collapsed by default; stretches to fill height only while expanded)
+1. **Audio**: path row with **Choose File…** and **Choose Folder…**. Status line below. Section status: `✓ {n} track(s)`.
+2. **Image or video**: path row with **Choose…**, a 104×104 thumbnail (94×94 image, aspect kept; a video shows its first frame), and a status line.
+3. **Track timings** (shown once audio is found; section status `{n} track(s)`)
    - Table, one row per track: **Audio** (file name, tooltip = full name) | **Start** (text field, placeholder `HH:MM:SS`, default `00:00:00`, plus ✨ button) | **Duration** (number, 1–3600 s, 1 decimal, suffix ` s`, default 60) | **▶/■** preview.
    - Status line under the table (see Messages).
    - Table style: alternating rows, no grid, hidden row header, rounded 8 px border, bold header. Same style as the Media Cutter table.
 
-**Right column**
-
-3. **Visual Effects**: the hint *"Drag rows to change the order effects are applied in."*, then a drag-reorderable list. Each row: ☰ handle (tooltip "Drag to reorder"), an enable checkbox, and a per-effect control:
+4. **Effects**: the hint *"Drag rows to change the order effects are applied in."*, then a drag-reorderable list. Each row: ☰ handle (tooltip "Drag to reorder"), an enable checkbox, and a per-effect control:
 
    | Row (default order) | Label | Control | Default |
    |---|---|---|---|
@@ -29,28 +26,33 @@ Two equal columns of **accordions**. Within each column, opening one section clo
    | glitch | Glitch | slider 0–100 % | off, 50 % |
 
    A row's control is enabled only while its checkbox is checked. Backlog: make the hint colour legible in both themes (desktop used `palette(mid)`, which reads near-black).
-4. **Layers**
+5. **Layers**
    - **Background**: **Fill** [Solid color | Image]. Solid shows a **Color** swatch button labelled `#rrggbb` (default `#19191d` = rgb 25,25,29). Image shows an **Image** picker. Only the row for the current mode is visible, label included. Backlog: put the swatch on the same row as Fill; add an enable/disable checkbox (off by default).
    - **Overlay**: **Image** picker (png/jpg/jpeg/webp/tif/tiff).
-5. **Post-Effects**
-   - **Video sound**: checkbox "Mute original video sound" (default on). **Visible only when the visual is a video.**
-   - **Video**: "Fade video in/out" (default on).
-   - **Audio**: "Fade audio in/out" (default on).
-6. **Output** (expanded by default)
+6. **Post-effects**
+   - Checkbox "Mute original video sound" (default on). **Visible only when the visual is a video.**
+   - "Fade video in/out" (default on).
+   - "Fade audio in/out" (default on).
+
+Sections 4–6 show a quiet status: the enabled effect chain, the background (+ overlay), the fades; or `Choose audio and an image or video first`.
+
+**Output rail**
+
+1. **Preview** (see [Live preview](#live-preview-new)).
+2. **Export**
    - **Export folder** + status (see [10](10-file-io-and-naming.md)).
    - **Video profile**: Visual native | Vertical 1080 × 1920 | Square 1080 × 1080 | Landscape 1920 × 1080.
    - **Frame rate**: 12–60, default 24.
    - **Quality**: see [Output and encoding](#output-and-encoding). Replaces desktop "Quality (CRF)" + "Encoding speed".
    - **Audio bitrate**: 128k | 192k | 256k | **320k**.
    - **Estimated duration** and **Job estimate** (read-only).
-   - **New:** **Preview** panel (see [Live preview](#live-preview-new)).
-
-**Footer**: a progress status label (clickable once outputs exist → opens History with the latest job selected) and a progress bar. Action row: **Clear** | **Cancel** (only while running) | requirements text (stretches) | **Generate Video(s)** (min height 44).
+3. **Action**: requirements text, **Generate Video(s)**, a progress status (clickable once outputs exist → opens History with the latest job selected) with a progress bar and **Cancel** while running, and **Clear**.
+4. **Generation failed** card (inline, replaces desktop's dialog), then **Results**: each video with a player and **Download**.
 
 ### Enablement
 
-- *Audio timestamps* is enabled when ≥1 audio file was found and no job is running.
-- *Visual Effects*, *Layers*, *Post-Effects* and *Output* are enabled when audio and visual are both valid and no job is running.
+- *Track timings* appears when ≥1 audio file was found; its inputs are disabled while a job runs.
+- The controls in *Effects*, *Layers*, *Post-effects* and *Export* are enabled when audio and visual are both valid and no job is running.
 - While a job runs, every input is disabled and any preview stops.
 - During drop analysis, every ✨ button is disabled and Generate is blocked.
 
@@ -176,7 +178,7 @@ The desktop uses libx264 with **CRF 14–30 (default 18)** and **preset ultrafas
 
 ## Live preview (new)
 
-Implemented as a **Preview** card at the top of the right column, outside the accordion so it stays visible while effects are edited. It has ▶/■, a position slider and, with several tracks, a Track picker.
+Implemented as the **Preview** block at the top of the output rail, so it stays visible while effects are edited. It has ▶/■, a position slider and, with several tracks, a Track picker.
 
 - Effects run through the same `GlEffectRenderer` as the render, and bass strength comes from the snippet's envelope, computed in the Worker.
 - Layer fitting uses the browser's 2D canvas scaling at preview size, not the Pillow-exact CPU path. That's fast, and identical to the eye.

@@ -73,6 +73,16 @@
     gap: 12px 14px;
     align-items: start;
   }
+  @container rail (max-width: 420px) {
+    .form {
+      grid-template-columns: 1fr;
+      gap: 6px;
+    }
+    select.input {
+      min-width: 0;
+      width: 100%;
+    }
+  }
   @media (max-width: 560px) {
     .form {
       grid-template-columns: 1fr;

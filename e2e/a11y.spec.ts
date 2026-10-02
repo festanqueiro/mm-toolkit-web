@@ -16,14 +16,9 @@ const pages: Record<string, (page: Page) => Promise<void>> = {
   home: async (page) => void (await page.goto("/")),
   "video-creator": async (page) => {
     await page.goto("/#/video-creator");
-    await pick(page, "Input", "Choose File…", golden("audio/short-10s-mono.wav"));
-    await pick(page, "Input", "Choose…", media("visual-320x240.png"));
+    await pick(page, "Audio", "Choose File…", golden("audio/short-10s-mono.wav"));
+    await pick(page, "Image or video", "Choose…", media("visual-320x240.png"));
     await expect(page.getByTestId("visual-status")).toHaveText("✓ Image ready.");
-    await page.getByRole("button", { name: "Audio timestamps" }).click();
-  },
-  "video-creator effects": async (page) => {
-    await pages["video-creator"]!(page);
-    await page.getByRole("button", { name: "Visual Effects" }).click();
   },
   cutter: async (page) => {
     await page.goto("/#/cutter");

@@ -118,17 +118,15 @@ test("Load Job restores the Converter's format and the Video Creator's per-track
 
   // Video Creator: one track starting at 27 s, 1 s long.
   await page.goto("/#/video-creator");
-  const input = page.getByRole("region", { name: "Input" });
   await pick(page, "Choose File…", golden("audio/drop-30s-stereo.wav"));
   const chooser = page.waitForEvent("filechooser");
-  await input.getByRole("button", { name: "Choose…", exact: true }).click();
+  await page.getByRole("region", { name: "Image or video" }).getByRole("button", { name: "Choose…", exact: true }).click();
   await (await chooser).setFiles(media("visual-320x240.png"));
   await expect(page.getByTestId("visual-status")).toHaveText("✓ Image ready.");
-  await page.getByRole("button", { name: "Audio timestamps" }).click();
   await page.getByLabel("Start for track 1").fill("27");
   await page.getByLabel("Duration for track 1 in seconds").fill("1");
   await page.getByLabel("Duration for track 1 in seconds").blur();
-  if (browserName === "chromium") await page.getByRole("region", { name: "Output" }).getByRole("button", { name: "Choose…" }).click();
+  if (browserName === "chromium") await page.getByRole("region", { name: "Export" }).getByRole("button", { name: "Choose…" }).click();
   download = browserName === "chromium" ? null : page.waitForEvent("download", { timeout: 90_000 });
   await page.getByRole("button", { name: "Generate Video" }).click();
   await download;
