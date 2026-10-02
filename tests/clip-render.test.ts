@@ -65,11 +65,11 @@ describe("cutClipsJob (AIFF path, no WebCodecs needed)", () => {
     // Clamped at the end of the source, like FFmpeg `-t` past EOF.
     const tail = decodeAiff(await outputs[1]!.file!.arrayBuffer());
     expect(tail.channels[0]!.length).toBe(source.channels[0]!.length - 9 * rate);
-    expect(progress).toEqual([
-      [0, "Creating clip 1 of 2"],
-      [50, "Creating clip 2 of 2"],
-      [100, "Finished 2 clips"],
-    ]);
+    expect(progress[0]).toEqual([0, "Creating clip 1 of 2"]);
+    expect(progress).toContainEqual([50, "Creating clip 2 of 2"]);
+    expect(progress.at(-1)).toEqual([100, "Finished 2 clips"]);
+    const percents = progress.map(([p]) => p);
+    expect(percents).toEqual([...percents].sort((a, b) => a - b));
   });
 
   it("validates like the desktop", async () => {

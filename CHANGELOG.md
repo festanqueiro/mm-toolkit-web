@@ -6,6 +6,20 @@ policy in `CLAUDE.md` (patch by default, minor/major only when requested).
 
 ## [Unreleased]
 
+## [0.1.11] - 2026-10-02
+
+### Added
+- **Media Converter** tab: convert batches of audio or video files, fully in a Worker.
+  - Add files by picker or drag & drop; Remove Selected; Preview Selected plays inline. Mixed or unusable batches are explained.
+  - Audio → MP3 (128–320 kbps), WAV/AIFF 24-bit, FLAC, M4A/AAC 256k, OGG (Opus 192k until ADR-003).
+  - Video → MP4/MOV/MKV (H.264 + AAC) or WebM (VP9 + Opus) at the source size. AVI is listed but not available in the browser yet (ADR-004).
+  - `{name}.{format}` with the conflict policy, export folder (Chrome/Edge) or Downloads/ZIP, progress, Cancel, the "Conversion failed" dialog, History and the "Conversion finished" notification.
+- A streaming resampler (identical to the one-shot one) so long files resample without being held in memory.
+
+### Changed
+- The Cutter and the Converter share one transcoding engine and one job Worker.
+- Opus is always encoded at 48 kHz, and AAC at 48 kHz unless the source is 44.1/48 kHz: WebKit's encoders fail or write broken ADTS at unusual rates.
+
 ## [0.1.10] - 2026-10-02
 
 ### Added

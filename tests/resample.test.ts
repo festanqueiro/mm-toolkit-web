@@ -42,3 +42,23 @@ describe("loopTo (moviepy AudioLoop)", () => {
     expect(Array.from(loopTo([new Float32Array(0)], 3)[0]!)).toEqual([0, 0, 0]);
   });
 });
+
+describe("StreamResampler", () => {
+  it("matches resampling everything at once, for any span sizes", async () => {
+    const { StreamResampler, resampleChannel } = await import("../src/engine/audio/resample");
+    const input = Float32Array.from({ length: 5000 }, (_, i) => Math.sin(i / 7) * 0.6 + Math.sin(i / 1.3) * 0.2);
+    for (const [from, to] of [
+      [11_025, 48_000],
+      [48_000, 44_100],
+      [44_100, 48_000],
+    ]) {
+      const whole = resampleChannel(input, from!, to!);
+      const stream = new StreamResampler(1, from!, to!);
+      const parts: number[] = [];
+      for (let at = 0, step = 1; at < input.length; at += step, step = (step * 7) % 997 + 1) parts.push(...stream.push([input.subarray(at, at + step)])[0]!);
+      parts.push(...stream.finish()[0]!);
+      expect(parts.length).toBe(whole.length);
+      expect(Float32Array.from(parts)).toEqual(whole);
+    }
+  });
+});

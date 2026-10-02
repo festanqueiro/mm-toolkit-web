@@ -57,6 +57,26 @@ Web additions: drag & drop onto the list; preview plays inline instead of openin
 
 Video quality: use the [04](04-video-creator.md#output-and-encoding) mapping at "High" (≈ CRF 18). For WebM use "Standard" (≈ CRF 28 VP9).
 
+### Web implementation (as built)
+
+The job runs in `workers/job.worker.ts` (`engine/render/convert.ts`), each file through the shared `engine/render/transcode.ts` that the Media Cutter also uses:
+
+- **Mediabunny `Conversion`** whenever it can read the source and write the target: MP3 (LAME WASM), WAV (`pcm-s24`), FLAC (WASM; a 16-bit FLAC source stays 16-bit), M4A/AAC (WebCodecs, else WASM), OGG, and every video target. First video + first audio stream, always re-encoded.
+- **A streamed PCM pipeline** otherwise: AIFF sources (read by byte range), AIFF output (24-bit BE written in TS), and audio the page decoded with Web Audio.
+- **Video**: MP4/MOV/MKV are H.264 at the "High" preset + AAC 256k; WebM is VP9 at "Standard" + Opus 192k. When the preferred codec can't be encoded, the next one the container allows, with a warning.
+- **Undecodable audio** (a decoder that hangs, e.g. WebKitGTK's Vorbis): the stall watchdog stops the file, the Worker reports its index and the outputs already written, the page decodes that file with Web Audio, and the job resumes there. Nothing is converted twice.
+- Progress also moves within a file: `round((i + fraction) / n * 100)`.
+- **Inputs**: a batch is probed (container parses, has a stream of its kind). A file that fails (e.g. AVI, which Mediabunny can't read) shows "can't be used" in the list and the batch status `One or more selected files cannot be used.`
+- **Preview Selected** plays the first selected file inline with the native player.
+
+### Documented deviations
+
+- **AVI output** is listed but disabled ("not available"): it needs MPEG-4 Part 2 + an AVI muxer (ffmpeg.wasm). Pending **ADR-004**.
+- **OGG** is **Opus 192 kbps** (Vorbis q6 ≈ 192 kbps) until **ADR-003**.
+- **Sample rates**: Opus is always encoded at 48 kHz; AAC keeps 44.1/48 kHz sources and resamples others to 48 kHz. Native encoders misbehave at unusual rates (WebKit's Opus fails at 11.025 kHz; its AAC writes a config ADTS can't carry). Streamed with `StreamResampler`.
+- The web **adds** picked files to the list (deduped) instead of replacing it, so a batch can be built from several folders.
+- No WASM size ceiling is needed: the WASM encoders here are audio-only and stream, so the ffmpeg.wasm limit below doesn't apply until ffmpeg.wasm ships.
+
 ## Size limits
 
 - **WebCodecs path**: streaming, so no hard ceiling beyond disk/OPFS quota.
