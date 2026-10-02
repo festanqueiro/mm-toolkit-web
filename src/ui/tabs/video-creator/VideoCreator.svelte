@@ -27,6 +27,14 @@
     if (app.settingsLoaded) vc.restore();
   });
 
+  // Desktop blocks closing while rendering; the web asks before leaving the page.
+  $effect(() => {
+    if (!vc.running && vc.analysingKey === null) return;
+    const guard = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener("beforeunload", guard);
+    return () => window.removeEventListener("beforeunload", guard);
+  });
+
   const subtitle = routes.find((r) => r.path === "video-creator")!.subtitle;
 
   type Left = "input" | "timestamps";
@@ -262,12 +270,41 @@
 </div>
 
 <footer class="action-bar">
-  <button type="button" class="btn ghost" disabled={vc.running} onclick={() => vc.clear()}>Clear</button>
-  <p class="requirements" class:ok={req.ready} data-testid="requirements" aria-live="polite">{req.message}</p>
-  <button type="button" class="btn primary generate" disabled title="Video rendering arrives in the next update.">
-    {generateLabel(vc.trackCount)}
-  </button>
+  {#if vc.progress}
+    <div class="progress-row">
+      <p class="progress-status" data-testid="progress-status" aria-live="polite">{vc.progress.status}</p>
+      {#if vc.running}
+        <progress max="100" value={vc.progress.percent} aria-label="Generation progress">{vc.progress.percent}%</progress>
+      {/if}
+    </div>
+  {/if}
+  {#each vc.warnings as warning (warning)}
+    <p class="status warn progress-row">{warning}</p>
+  {/each}
+  <div class="actions">
+    <button type="button" class="btn ghost" disabled={vc.running} onclick={() => vc.clear()}>Clear</button>
+    {#if vc.running}
+      <button type="button" class="btn" disabled={vc.cancelling} onclick={() => vc.cancel()}>Cancel</button>
+    {/if}
+    <p class="requirements" class:ok={req.ready} data-testid="requirements" aria-live="polite">{req.message}</p>
+    <button type="button" class="btn primary generate" disabled={!req.ready} title={req.message} onclick={() => vc.generate()}>
+      {generateLabel(vc.trackCount)}
+    </button>
+  </div>
 </footer>
+
+<Modal title="Generation failed" open={vc.failure !== null} onclose={() => (vc.failure = null)}>
+  <p>{vc.failure?.message}</p>
+  {#if vc.failure?.details}
+    <details>
+      <summary>Details</summary>
+      <pre>{vc.failure.details}</pre>
+    </details>
+  {/if}
+  {#snippet actions()}
+    <button type="button" class="btn primary" onclick={() => (vc.failure = null)}>OK</button>
+  {/snippet}
+</Modal>
 
 <Modal title="Detect drop start" bind:open={dropDialogOpen}>
   <p>{dropDialogMessage(dropKey ? (vc.fileFor(dropKey)?.name ?? "") : "")}</p>
@@ -424,9 +461,8 @@
     position: sticky;
     bottom: 12px;
     z-index: 10;
-    display: flex;
-    gap: 12px;
-    align-items: center;
+    display: grid;
+    gap: 8px;
     margin-top: 18px;
     padding: 10px 12px 10px 10px;
     border: 1px solid var(--border);
@@ -435,6 +471,35 @@
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     box-shadow: var(--shadow-md);
+  }
+  .actions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+  .progress-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin: 0 4px;
+  }
+  .progress-status {
+    margin: 0;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  progress {
+    flex: 1;
+    height: 8px;
+    accent-color: var(--accent);
+  }
+  pre {
+    max-height: 200px;
+    overflow: auto;
+    font-size: 0.8rem;
+    white-space: pre-wrap;
   }
   .requirements {
     flex: 1;
@@ -452,7 +517,7 @@
     border-radius: 12px;
   }
   @media (max-width: 560px) {
-    .action-bar {
+    .actions {
       flex-wrap: wrap;
     }
     .requirements {

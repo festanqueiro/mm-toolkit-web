@@ -138,6 +138,22 @@ Port of `render_track`. Runs in the job Worker.
 8. **Encode** H.264 4:2:0 + AAC (`audioBitrate`) → **.mp4** with `fastStart`. Stream to the sink.
 9. On error: delete the partial output and re-raise. On cancel: delete the partial output.
 
+### Implementation notes (render)
+
+- `engine/render/promo.ts` runs in `workers/render.worker.ts`. Still visuals use the Pillow-exact CPU fit once per track. Video visuals are fitted per frame with the 2D scaler (visual-only parity) and read through `canvasesAtTimestamps` with all frame times known up front.
+- **No WebGL in Workers** (WebKitGTK, older Safari): the render falls back to the CPU reference effects. They're bit-exact, but much slower, and a warning is shown.
+- **Frames**: `ceil(duration × fps)` (moviepy's `np.arange(0, duration, 1/fps)`).
+- **Audio** is resampled to **44.1 kHz** like moviepy's `audio_fps` (windowed sinc), then encoded as AAC. Without an AAC encoder (Firefox) it's Opus at 48 kHz, with a warning.
+  - The original video sound (when not muted) is looped, summed with the faded music and clipped.
+- **Video codec**: H.264 first (Chrome, Safari and Firefox all output limited-range `yuv420p`). The fallbacks are VP9, then AV1, in MP4, with a warning.
+- **Destinations**:
+  - Tier 1 writes into the chosen folder with the conflict policy. The live handle is used; IndexedDB only after a reload.
+  - Tier 2 stages in OPFS, then downloads, or ZIPs batches.
+  - Without OPFS (Safari private browsing), outputs stay in memory and download from there.
+  - Staged copies are deleted when the **next** job starts or on load, never right after `a.click()`. That would cancel the download, which reads the file lazily.
+- **Cancel** is checked before each frame. A partial output is never written: the MP4 is finalised in memory before it reaches the sink.
+- On success the job is added to History (newest 20) and, if enabled, sends the notification "Promo video finished" / "Created {n} file{s}.". A `beforeunload` guard and a Screen Wake Lock are held while a job runs.
+
 ### Batch (`generate_videos`)
 
 - Tracks run sequentially.

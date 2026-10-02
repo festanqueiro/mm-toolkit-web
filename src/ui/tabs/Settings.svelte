@@ -93,6 +93,8 @@
 
 <PageHeader title="Settings" subtitle="Defaults shared by all Media Tools features." icon="settings" />
 
+<!-- Render once settings have loaded, so stored values can't overwrite what's being typed. -->
+{#if app.settingsLoaded}
 <div class="stack">
   <Section title="General">
     <div class="form">
@@ -227,6 +229,7 @@
     </div>
   </Section>
 </div>
+{/if}
 
 <style>
   .stack {
