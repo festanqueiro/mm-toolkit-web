@@ -3,11 +3,14 @@
   import Icon from "./Icon.svelte";
   import { routeFromHash, routes } from "./routes";
   import About from "./tabs/About.svelte";
+  import History from "./tabs/History.svelte";
   import MediaConverter from "./tabs/converter/MediaConverter.svelte";
   import MediaCutter from "./tabs/cutter/MediaCutter.svelte";
   import Placeholder from "./tabs/Placeholder.svelte";
   import Settings from "./tabs/Settings.svelte";
   import VideoCreator from "./tabs/video-creator/VideoCreator.svelte";
+  import { historyTabLabel } from "../engine/history";
+  import { historyUi } from "./history.svelte";
   import { initApp } from "./state.svelte";
 
   initApp();
@@ -45,9 +48,10 @@
       </a>
       <nav class="tabs" aria-label="Tools">
         {#each routes as route (route.path)}
+          {@const unread = route.path === "history" && historyUi.unread > 0}
           <a class="tab" href="#/{route.path}" aria-current={route.path === current.path ? "page" : undefined}>
-            <Icon name={route.icon} size={18} />
-            <span>{route.label}</span>
+            <Icon name={unread ? "notifications" : route.icon} size={18} />
+            <span>{route.path === "history" ? historyTabLabel(historyUi.unread) : route.label}</span>
           </a>
         {/each}
       </nav>
@@ -67,6 +71,8 @@
       <MediaCutter />
     {:else if current.path === "converter"}
       <MediaConverter />
+    {:else if current.path === "history"}
+      <History />
     {:else if current.path === "settings"}
       <Settings />
     {:else}

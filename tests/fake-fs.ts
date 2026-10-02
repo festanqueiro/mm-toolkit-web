@@ -53,6 +53,9 @@ export class FakeDirectoryHandle {
   async removeEntry(name: string): Promise<void> {
     if (!this.entries.delete(name)) throw domError("NotFoundError");
   }
+  async *keys(): AsyncIterable<string> {
+    yield* [...this.entries.keys()];
+  }
 }
 
 /** Cast helper: the fakes implement the subset our code uses. */

@@ -35,6 +35,7 @@ export class OutputFolder {
       throw error;
     }
     const previous = this.ref;
+    this.token++; // Supersede any lookup still in flight.
     this.handle = handle;
     this.ref = await fileRefFromHandle(handle);
     this.permission = await queryPermission(handle, "readwrite");
@@ -54,9 +55,16 @@ export class OutputFolder {
     if (handle && (await requestPermission(handle, "readwrite"))) this.permission = "granted";
   }
 
+  /** Re-resolve the handle and permission; a later `set`/`refresh` wins over a slower earlier one. */
   async refresh(): Promise<void> {
+    const token = ++this.token;
     this.handle = null;
-    const handle = await this.current();
-    this.permission = handle ? await queryPermission(handle, "readwrite") : "none";
+    const ref = this.ref;
+    const handle = await handleFor<FileSystemDirectoryHandle>(ref);
+    const permission = handle ? await queryPermission(handle, "readwrite") : "none";
+    if (token !== this.token) return;
+    this.handle = handle;
+    this.permission = permission;
   }
+  private token = 0;
 }

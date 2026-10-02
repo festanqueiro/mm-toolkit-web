@@ -20,19 +20,28 @@ import {
   PROFILES,
   trackOptions,
   TIMESTAMPS_HINT,
+  AUDIO_BITRATES,
+  DEFAULT_TRACK_DURATION,
+  MAX_FPS,
+  MIN_FPS,
+  QUALITIES,
   type AudioBitrate,
   type Quality,
   type TrackRow,
 } from "../../../engine/video-creator";
+import { HISTORY_STATUS } from "../../../engine/history";
+import { isFolderRef } from "../../../io/history-outputs";
 import { trackIdentity, type FileRef } from "../../../io/file-ref";
 import { deliverStaged } from "../../../io/deliver";
 import { decodeImage } from "../../../io/image-decode";
-import { clearAllStaging, type OutputRef } from "../../../io/sink";
+import { prepareStaging } from "../../../io/retention";
+import type { OutputRef } from "../../../io/sink";
 import { addHistory, historyId, localTimestamp } from "../../../storage/history";
 import type { RenderRequest } from "../../../workers/render-protocol";
 import type { Picked } from "../../../io/pick";
 import { probeVisual, type VisualProbe } from "../../../io/visual";
 import { decodeAudioFile, detectDrop } from "../../../workers/media-client";
+import { jobRecorded } from "../../history.svelte";
 import { historyOutputs, notifyFinished, runJob } from "../../job-runner";
 import { OutputFolder } from "../../output-folder.svelte";
 import { app, resetSettings, updateSetting } from "../../state.svelte";
@@ -71,6 +80,13 @@ class VideoCreatorState {
 
   // Generation progress (footer). `status` is the desktop's progress label.
   progress = $state<{ percent: number; status: string; outputs: number } | null>(null);
+  /** Inputs named by Load Job that the user still has to pick (files aren't persisted). */
+  pendingAudio = $state<string | null>(null);
+  pendingVisual = $state<string | null>(null);
+  /** Per-track timings from Load Job, applied when the same tracks are picked again. */
+  private savedRows: TrackRow[] = [];
+  /** The last finished job's History id (the progress label links to it). */
+  lastJobId = $state<string | null>(null);
   warnings = $state<string[]>([]);
   failure = $state<{ message: string; details: string } | null>(null);
   cancelling = $state(false);
@@ -103,11 +119,55 @@ class VideoCreatorState {
     const label = picked.folder ?? picked.files[0]?.file.name ?? "";
     this.audio = { label, folder: !!picked.folder, files };
     this.filesByKey = new Map(files.map((file) => [trackIdentity(file), file]));
+    const saved = this.savedRows;
     this.rows = mergeTrackRows(
-      $state.snapshot(this.rows),
+      [...saved, ...($state.snapshot(this.rows) as TrackRow[])],
       files.map((file) => ({ key: trackIdentity(file), name: file.name })),
     );
-    this.timestampsStatus = this.rows.length ? TIMESTAMPS_HINT : "";
+    const restored = saved.length > 0 && this.rows.some((row) => saved.some((s) => s.key === row.key));
+    this.savedRows = [];
+    this.pendingAudio = null;
+    this.timestampsStatus = restored ? HISTORY_STATUS.loadedTimings : this.rows.length ? TIMESTAMPS_HINT : "";
+  }
+
+  /**
+   * Load Job (spec 07): restore the form from a History record. Inputs can't be persisted on
+   * the web, so they're named for re-selection; the per-track timings apply once the same
+   * tracks are picked again (matched by track identity).
+   */
+  loadFromHistory(record: Record<string, unknown>): void {
+    if (this.running) return;
+    // The loaded job supersedes the one-time restore from Settings.
+    this.restored = true;
+    this.clear();
+    const effects = record.effects ? fromEffectsState(record.effects) : defaultEffectSettings();
+    if (!record.effects) effects.bass_blur.enabled = record.bass_effect === true;
+    // Layer images aren't re-openable; keep their settings, drop the refs.
+    effects.overlay.mediaPath = null;
+    effects.background.imagePath = null;
+    this.effects = effects;
+    this.videoFade = record.video_fade !== false;
+    this.audioFade = record.audio_fade !== false;
+    this.muteOriginal = record.mute_original_video_audio !== false;
+    const fps = Number(record.fps);
+    if (Number.isInteger(fps) && fps >= MIN_FPS && fps <= MAX_FPS) this.fps = fps;
+    const size = Array.isArray(record.profile) ? (record.profile as number[]).join("x") : null;
+    this.profile = Math.max(0, PROFILES.findIndex((p) => (p.size ? p.size.join("x") : null) === size));
+    if (QUALITIES.some((q) => q.value === record.quality)) this.quality = record.quality as Quality;
+    if ((AUDIO_BITRATES as readonly unknown[]).includes(record.audio_bitrate)) this.audioBitrate = record.audio_bitrate as AudioBitrate;
+    if (isFolderRef(record.output)) void this.folder.set(record.output);
+    const tracks = Array.isArray(record.tracks) ? (record.tracks as { path?: { name?: string; size?: number; lastModified?: number }; start?: number; duration?: number }[]) : [];
+    this.savedRows = tracks
+      .filter((t) => t.path?.name)
+      .map((t) => ({
+        key: trackIdentity({ name: t.path!.name!, size: t.path!.size, lastModified: t.path!.lastModified }),
+        name: t.path!.name!,
+        start: formatTimestamp(Number(t.start) || 0),
+        duration: Number(t.duration) || DEFAULT_TRACK_DURATION,
+      }));
+    const nameOf = (ref: unknown) => ((ref as { name?: unknown } | null)?.name as string | undefined) || null;
+    this.pendingAudio = nameOf(record.source);
+    this.pendingVisual = nameOf(record.cover);
   }
 
   /** Validate and thumbnail the visual; later picks win over slower earlier probes. */
@@ -117,6 +177,7 @@ class VideoCreatorState {
     this.visualFile = file;
     this.visual = null;
     if (!file) return;
+    this.pendingVisual = null;
     this.visualChecking = true;
     const probe = await probeVisual(file);
     if (token !== this.visualToken) {
@@ -258,7 +319,7 @@ class VideoCreatorState {
 
     const jobId = historyId();
     const tier1 = !!app.capabilities?.directoryPicker;
-    if (!s["web/keep_output_copies"]) await clearAllStaging().catch(() => {});
+    await prepareStaging(s["web/keep_output_copies"]).catch(() => {});
     try {
       const visual = this.visual;
       const job: PromoJob = {
@@ -338,6 +399,8 @@ class VideoCreatorState {
         audio_bitrate: this.audioBitrate,
         outputs: historyOutputs(outputs),
       });
+      this.lastJobId = id;
+      jobRecorded(id);
     } catch {
       // History is best effort (storage may be unavailable).
     }
@@ -346,6 +409,8 @@ class VideoCreatorState {
   /** Clear: inputs, effects and output back to defaults (desktop `clear`). The drop lead-in is kept. */
   clear(): void {
     if (this.running) return;
+    this.pendingAudio = this.pendingVisual = null;
+    this.savedRows = [];
     this.progress = null;
     this.warnings = [];
     this.stopPreview();

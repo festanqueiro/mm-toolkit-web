@@ -48,3 +48,16 @@ On each finished job:
    - Web: Notifications API, with permission requested the first time the setting is enabled. Clicking it focuses the tab and selects the latest job, **without switching tabs** (desktop behaviour).
 3. If the History tab isn't active: increment the unread badge. The tab label becomes `History ({n})` with the `notifications` icon. Opening History resets it. Web extra: `navigator.setAppBadge(n)` when installed as a PWA.
 4. The tool's progress label becomes a link that opens History with the latest job selected.
+
+## Web implementation (as built)
+
+- `ui/tabs/History.svelte`; rules in `engine/history.ts`; output lookup in `io/history-outputs.ts`; retention in `io/retention.ts`; shared signals in `ui/history.svelte.ts`.
+- **Rendered files** lists outputs that still open without prompting: files in the job's export folder when its permission is granted, and copies kept in OPFS. A folder whose permission lapsed shows the `Click to re-allow access to "{folder}".` link (read access). Choosing a file previews it inline; **Download** / **Download all** save it again. This replaces desktop **Show Output Folder**.
+- **Load Job** restores the form and switches tabs:
+  - Video Creator: effects (or the legacy `bass_effect`), fades, mute, fps, profile, quality, audio bitrate, export folder. The audio and visual zones say `Re-select {name}`; picking the same tracks again re-applies their saved start/duration (matched by name + size + modified time) with `✓ Loaded saved per-track timings.`
+  - Media Cutter: clip rows (spec 05) + export folder; `Re-select {source}`.
+  - Media Converter: format, MP3 bitrate, export folder; `Re-select {files}`.
+  - A loaded job supersedes the tool's one-time restore from Settings.
+- **Retention**: copies kept only when the Setting is on, capped at 2 GB, evicted oldest-first at app load and when a job starts. Settings shows `Using {size} of 2.0 GB.` Clear History can also delete the kept copies.
+- **Signals**: finished jobs raise `History ({n})` (bell icon) and the app badge while History isn't open; the finished progress label is a link to History with that job selected.
+- Live handles picked in a session are cached by ref id, so lookups don't re-read IndexedDB. (Chromium 153 crashes when an **OPFS** directory handle is read back from IndexedDB; the app never stores OPFS handles, but the e2e folder mock is one.)

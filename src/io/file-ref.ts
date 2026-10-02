@@ -22,6 +22,12 @@ export function fileRefFromFile(file: File): FileRef {
   return { id: newId(), name: file.name, kind: "file", size: file.size, lastModified: file.lastModified, hasHandle: false };
 }
 
+/**
+ * Live handles picked in this session, by ref id: lookups skip the IndexedDB round trip, and
+ * only a reload has to read a handle back from storage.
+ */
+const live = new Map<string, FileSystemHandle>();
+
 /** A ref backed by a persisted FileSystemHandle. */
 export async function fileRefFromHandle(handle: FileSystemHandle): Promise<FileRef> {
   const ref: FileRef = { id: newId(), name: handle.name, kind: handle.kind, hasHandle: true };
@@ -30,16 +36,22 @@ export async function fileRefFromHandle(handle: FileSystemHandle): Promise<FileR
     ref.size = file.size;
     ref.lastModified = file.lastModified;
   }
+  live.set(ref.id, handle);
   await dbSet("handles", ref.id, handle);
   return ref;
 }
 
 export async function handleFor<T extends FileSystemHandle = FileSystemHandle>(ref: FileRef | null | undefined): Promise<T | null> {
   if (!ref?.hasHandle) return null;
-  return ((await dbGet<FileSystemHandle>("handles", ref.id)) as T | undefined) ?? null;
+  const cached = live.get(ref.id);
+  if (cached) return cached as T;
+  const stored = (await dbGet<FileSystemHandle>("handles", ref.id)) as T | undefined;
+  if (stored) live.set(ref.id, stored);
+  return stored ?? null;
 }
 
 export async function forgetRef(ref: FileRef | null | undefined): Promise<void> {
+  if (ref) live.delete(ref.id);
   if (ref?.hasHandle) await dbDelete("handles", ref.id);
 }
 

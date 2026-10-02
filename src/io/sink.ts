@@ -198,3 +198,42 @@ export async function clearStaging(jobId: string, root?: FileSystemDirectoryHand
     if ((error as DOMException)?.name !== "NotFoundError") throw error;
   }
 }
+
+async function stagingRoot(root?: FileSystemDirectoryHandle): Promise<FileSystemDirectoryHandle | null> {
+  const opfs = root ?? (await navigator.storage.getDirectory());
+  try {
+    return await opfs.getDirectoryHandle(STAGING_ROOT);
+  } catch {
+    return null;
+  }
+}
+
+const names = async (dir: FileSystemDirectoryHandle) => {
+  const out: string[] = [];
+  for await (const name of (dir as unknown as { keys: () => AsyncIterable<string> }).keys()) out.push(name);
+  return out;
+};
+
+/** Bytes kept per staged job folder (job ids sort oldest first). */
+export async function stagingUsage(root?: FileSystemDirectoryHandle): Promise<{ id: string; bytes: number }[]> {
+  const exports = await stagingRoot(root);
+  if (!exports) return [];
+  const jobs: { id: string; bytes: number }[] = [];
+  for (const id of await names(exports)) {
+    const dir = await exports.getDirectoryHandle(id).catch(() => null);
+    if (!dir) continue;
+    let bytes = 0;
+    for (const name of await names(dir)) {
+      const file = await dir.getFileHandle(name).catch(() => null);
+      if (file) bytes += (await file.getFile()).size;
+    }
+    jobs.push({ id, bytes });
+  }
+  return jobs;
+}
+
+/** Remove whole job folders by id. */
+export async function removeStagedJobs(ids: string[], root?: FileSystemDirectoryHandle): Promise<void> {
+  const exports = await stagingRoot(root);
+  for (const id of ids) await exports?.removeEntry(id, { recursive: true }).catch(() => {});
+}

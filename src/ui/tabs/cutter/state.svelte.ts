@@ -2,16 +2,19 @@
  * Media Cutter tab state (spec 05). Module-level so it survives switching tabs. Pure rules
  * live in `engine/clips.ts`; the player itself lives in the component (it needs the element).
  */
-import { clipOutputFormat, clipRequests, CLIP_PROGRESS, emptyClipRow, finishedClips, sourceReady, type ClipRow } from "../../../engine/clips";
+import { clipOutputFormat, clipRequests, CLIP_PROGRESS, emptyClipRow, finishedClips, rowsFromHistory, sourceReady, type ClipRow } from "../../../engine/clips";
+import { isFolderRef } from "../../../io/history-outputs";
 import type { MediaKind } from "../../../engine/media-kind";
 import { formatTimestamp } from "../../../engine/time";
 import type { FileRef } from "../../../io/file-ref";
 import { deliverStaged } from "../../../io/deliver";
 import { probeSource } from "../../../io/media-probe";
 import { decodeAtNativeRate } from "../../../workers/media-client";
-import { clearAllStaging, type OutputRef } from "../../../io/sink";
+import { prepareStaging } from "../../../io/retention";
+import type { OutputRef } from "../../../io/sink";
 import { addHistory, historyId, localTimestamp } from "../../../storage/history";
 import type { ToolRequest, Undecodable } from "../../../workers/render-protocol";
+import { jobRecorded } from "../../history.svelte";
 import { historyOutputs, notifyFinished, runJob } from "../../job-runner";
 import { OutputFolder } from "../../output-folder.svelte";
 import { app, resetSettings, updateSetting } from "../../state.svelte";
@@ -28,6 +31,10 @@ class CutterState {
   running = $state(false);
   cancelling = $state(false);
   progress = $state<{ percent: number; status: string } | null>(null);
+  /** The source named by Load Job that the user still has to pick (files aren't persisted). */
+  pendingSource = $state<string | null>(null);
+  /** The last finished job's History id (the progress label links to it). */
+  lastJobId = $state<string | null>(null);
   warnings = $state<string[]>([]);
   failure = $state<{ message: string; details: string } | null>(null);
 
@@ -51,6 +58,7 @@ class CutterState {
       this.source = null;
       return;
     }
+    this.pendingSource = null;
     this.source = { file, url: URL.createObjectURL(file), kind: null, ok: false, message: "", checking: true };
     const probe = await probeSource(file);
     if (token !== this.sourceToken || !this.source) return;
@@ -107,7 +115,7 @@ class CutterState {
 
     const jobId = historyId();
     const tier1 = !!app.capabilities?.directoryPicker;
-    if (!s["web/keep_output_copies"]) await clearAllStaging().catch(() => {});
+    await prepareStaging(s["web/keep_output_copies"]).catch(() => {});
     try {
       const handle = tier1 ? await this.folder.current() : null;
       if (tier1 && !handle) throw new Error("Choose a writable export folder.");
@@ -177,9 +185,27 @@ class CutterState {
         clips,
         outputs: historyOutputs(outputs),
       });
+      this.lastJobId = id;
+      jobRecorded(id);
     } catch {
       // History is best effort (storage may be unavailable).
     }
+  }
+
+  /** Load Job (spec 07): clip rows and export folder; the source is named for re-selection. */
+  loadFromHistory(record: Record<string, unknown>): void {
+    if (this.running) return;
+    // The loaded job supersedes the one-time restore from Settings.
+    this.restored = true;
+    this.clear();
+    const clips = (Array.isArray(record.clips) ? record.clips : []) as { title?: unknown; start?: unknown; duration?: unknown }[];
+    const rows = rowsFromHistory(
+      clips.map((c) => ({ title: typeof c.title === "string" ? c.title : "", start: Number(c.start) || 0, duration: Number(c.duration) || 60 })),
+      formatTimestamp,
+    );
+    this.rows = rows.length ? rows : [emptyClipRow()];
+    if (isFolderRef(record.output)) void this.folder.set(record.output);
+    this.pendingSource = ((record.source as { name?: unknown } | null)?.name as string | undefined) || null;
   }
 
   /** Clear: source, one empty row, export folder back to the Settings default (desktop `clear`). */
@@ -190,6 +216,7 @@ class CutterState {
     void this.setSource(null);
     this.rows = [emptyClipRow()];
     this.currentKey = null;
+    this.pendingSource = null;
     void this.folder.set(app.settings["general/default_output"]);
     void resetSettings(["clips/source", "clips/output"]);
   }

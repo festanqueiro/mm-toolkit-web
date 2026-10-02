@@ -6,6 +6,17 @@ policy in `CLAUDE.md` (patch by default, minor/major only when requested).
 
 ## [Unreleased]
 
+## [0.1.12] - 2026-10-02
+
+### Added
+- **History** tab: recent jobs (newest 20), each output that still exists (in your export folder, or kept in browser storage), inline preview, Download / Download all, Clear History.
+- **Load Job** restores a job's settings in its tool (Video Creator, Media Cutter, Media Converter) and names the files to re-select; Video Creator re-applies saved per-track timings when the same tracks are picked again.
+- Finished jobs show `History (n)` and the app badge until History is opened; the finished status line links to the job.
+- "Keep copies of outputs for History" now keeps copies across sessions within 2 GB (oldest removed first) and shows the space used.
+
+### Fixed
+- Switching export folders quickly could leave the previous folder's handle in use.
+
 ## [0.1.11] - 2026-10-02
 
 ### Added

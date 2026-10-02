@@ -26,8 +26,9 @@ export function initApp(): Promise<void> {
     }
     applyTheme(app.settings["web/theme"]);
     app.settingsLoaded = true;
-    // Downloads from the last session have long finished; drop their staged copies.
-    if (!app.settings["web/keep_output_copies"]) void import("../io/sink").then((m) => m.clearAllStaging()).catch(() => {});
+    // Downloads from the last session have long finished: drop their staged copies, or keep
+    // them for History within the size cap.
+    void import("../io/retention").then((m) => m.prepareStaging(app.settings["web/keep_output_copies"])).catch(() => {});
     app.capabilities = await detectCapabilities();
   })();
   return initialising;

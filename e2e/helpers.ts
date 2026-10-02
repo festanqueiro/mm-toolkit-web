@@ -24,7 +24,12 @@ export const storedSetting = (page: Page, key: string) =>
 /** Wait until a setting is persisted, so a reload can't race the IndexedDB write. */
 export const waitForStored = (page: Page, key: string, value: unknown) => expect.poll(() => storedSetting(page, key)).toEqual(value);
 
-/** Chromium exports into a folder: back the picker with an OPFS directory the test can read. */
+/**
+ * Chromium exports into a folder: back the picker with an OPFS directory the test can read.
+ * Caveat: Chromium 153 crashes the whole browser when an OPFS directory handle is read back
+ * from IndexedDB, so tests must not reload and then resolve this folder (real users' folders
+ * come from the picker, not OPFS, and aren't affected). Same-session lookups use the live cache.
+ */
 export async function mockFolderPicker(page: Page) {
   await page.addInitScript(() => {
     (window as unknown as { showDirectoryPicker: () => Promise<FileSystemDirectoryHandle> }).showDirectoryPicker = async () =>

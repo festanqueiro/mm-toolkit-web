@@ -1,0 +1,17 @@
+import { chromium } from "@playwright/test";
+const b = await chromium.launch(); const p = await b.newPage();
+let dead = false; b.on("disconnected", () => (dead = true));
+await p.addInitScript(() => { window.showDirectoryPicker = async () => (await navigator.storage.getDirectory()).getDirectoryHandle("exports-test", { create: true }); });
+await p.goto("http://localhost:4173/#/cutter");
+const chooser = p.waitForEvent("filechooser");
+await p.getByRole("button", { name: "Choose…", exact: true }).first().click();
+await (await chooser).setFiles("fixtures/golden/audio/short-10s-mono.wav");
+await p.getByText("✓ Source audio ready.").waitFor();
+await p.getByLabel("Duration for clip 1").fill("1");
+await p.getByRole("region", { name: /clip output$/ }).getByRole("button", { name: "Choose…" }).click();
+await p.getByRole("button", { name: "Create Audio Clips" }).click();
+await p.getByText("Finished 1 clip").waitFor();
+await p.evaluate(() => (location.hash = process.argv?.[2] ?? "#/history")).catch(() => {});
+await new Promise((r) => setTimeout(r, 2000));
+console.log(process.argv[2] ?? "", "browser", dead ? "DIED" : "alive");
+process.exit(0);
