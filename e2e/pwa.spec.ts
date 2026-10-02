@@ -23,7 +23,7 @@ test("works offline after the first load, including a clip job", async ({ page, 
     // A whole job offline: shell, job Worker, transcoder and codecs all come from the cache.
     await page.evaluate(() => (location.hash = "#/cutter"));
     const chooser = page.waitForEvent("filechooser");
-    await page.getByRole("region", { name: "Input" }).getByRole("button", { name: "Choose…" }).click();
+    await page.getByRole("region", { name: "Source" }).getByRole("button", { name: "Choose…" }).click();
     await (await chooser).setFiles(golden("audio/short-10s-mono.wav"));
     await expect(page.getByTestId("source-status")).toHaveText("✓ Source audio ready.");
     await page.getByLabel("Duration for clip 1").fill("1");
@@ -32,7 +32,7 @@ test("works offline after the first load, including a clip job", async ({ page, 
         (window as unknown as { showDirectoryPicker: () => Promise<FileSystemDirectoryHandle> }).showDirectoryPicker = async () =>
           (await navigator.storage.getDirectory()).getDirectoryHandle("exports-test", { create: true });
       });
-      await page.getByRole("region", { name: /clip output$/ }).getByRole("button", { name: "Choose…" }).click();
+      await page.getByRole("region", { name: "Export" }).getByRole("button", { name: "Choose…" }).click();
     }
     const download = browserName === "chromium" ? null : page.waitForEvent("download");
     await page.getByRole("button", { name: "Create Audio Clips" }).click();

@@ -8,7 +8,6 @@
     CLIPS_DOWNLOADS,
     createLabel,
     editingLabel,
-    kindWord,
     outputFormatStatus,
   } from "../../../engine/clips";
   import { reselectHint } from "../../../engine/history";
@@ -18,10 +17,12 @@
   import Icon from "../../Icon.svelte";
   import DropZone from "../../components/DropZone.svelte";
   import ExportFolder from "../../components/ExportFolder.svelte";
-  import JobFooter from "../../components/JobFooter.svelte";
-  import Modal from "../../components/Modal.svelte";
-  import PageHeader from "../../components/PageHeader.svelte";
-  import Section from "../../components/Section.svelte";
+  import RailAction from "../../components/RailAction.svelte";
+  import RailBlock from "../../components/RailBlock.svelte";
+  import RailError from "../../components/RailError.svelte";
+  import RailResults from "../../components/RailResults.svelte";
+  import SetupSection from "../../components/SetupSection.svelte";
+  import ToolLayout from "../../components/ToolLayout.svelte";
   import { routes } from "../../routes";
   import { openHistory } from "../../history.svelte";
   import { app } from "../../state.svelte";
@@ -195,11 +196,9 @@
   });
 </script>
 
-<PageHeader title="Media Cutter" {subtitle} icon="content_cut" />
-
-<div class="columns">
-  <div class="column">
-    <Section title="Input">
+<ToolLayout title="Media Cutter" {subtitle} icon="content_cut">
+  {#snippet setup()}
+    <SetupSection title="Source" status={cutter.source?.ok ? (kind === "video" ? "Video" : "Audio") : ""} tone="ok">
       <DropZone title="Source media" filled={sourceOk} disabled={cutter.running} ondropped={dropSource}>
         {#snippet icon()}<span class="tile" aria-hidden="true"><Icon name={kind === "video" ? "movie" : "audiotrack"} size={26} /></span>{/snippet}
         {#if cutter.source}
@@ -274,11 +273,9 @@
           <button type="button" class="btn" disabled={!ready || cutter.running} onclick={() => cutter.setFromPlayer("end", player?.now() ?? 0)}>Set End</button>
         </div>
       {/if}
-    </Section>
-  </div>
-
-  <div class="column">
-    <Section title="Clip timestamps">
+    
+    </SetupSection>
+    <SetupSection title="Clips">
       <ClipTable previewKey={clipPreview?.key ?? null} onpreview={previewClip} onedit={onEdit} disabled={cutter.running} />
       <div class="below-table">
         <button type="button" class="btn" disabled={cutter.running} onclick={() => cutter.addRow()}>
@@ -288,70 +285,59 @@
       <p class="status" class:ok={!resolved.error && !clipError} class:warn={!!(resolved.error || clipError)} data-testid="clip-status" aria-live="polite">
         {clipError ?? clipStatus(resolved)}
       </p>
-    </Section>
-
-    <Section title="{kindWord(kind)} clip output">
-      <div class="form">
-        <span class="label" id="clips-export-label">Export folder</span>
-        <div class="field">
-          <ExportFolder folder={cutter.folder} disabled={cutter.running} downloads={CLIPS_DOWNLOADS} labelId="clips-export-label" />
-          {#if kind && cutter.format}
-            <p class="status ok" data-testid="format-status">{outputFormatStatus(kind, cutter.format)}</p>
-          {/if}
-        </div>
-      </div>
-    </Section>
-  </div>
-</div>
-
-<JobFooter
-  progress={cutter.progress}
-  running={cutter.running}
-  cancelling={cutter.cancelling}
-  warnings={cutter.warnings}
-  requirement={req}
-  label={createLabel(kind)}
-  onstatus={cutter.lastJobId && !cutter.running ? () => openHistory(cutter.lastJobId) : null}
-  progressLabel="Clip progress"
-  onclear={() => cutter.clear()}
-  oncancel={() => cutter.cancel()}
-  onstart={() => cutter.create()}
-/>
-
-<Modal title="Clip creation failed" open={cutter.failure !== null} onclose={() => (cutter.failure = null)}>
-  <p>{cutter.failure?.message}</p>
-  {#if cutter.failure?.details}
-    <details>
-      <summary>Details</summary>
-      <pre>{cutter.failure.details}</pre>
-    </details>
-  {/if}
-  {#snippet actions()}
-    <button type="button" class="btn primary" onclick={() => (cutter.failure = null)}>OK</button>
+    
+    </SetupSection>
   {/snippet}
-</Modal>
+
+  {#snippet rail()}
+    <RailBlock title="Export">
+      <div class="stack">
+        <span class="label" id="clips-export-label">Export folder</span>
+        <ExportFolder folder={cutter.folder} disabled={cutter.running} downloads={CLIPS_DOWNLOADS} labelId="clips-export-label" />
+        {#if kind && cutter.format}
+          <p class="status ok" data-testid="format-status">{outputFormatStatus(kind, cutter.format)}</p>
+        {/if}
+      </div>
+    </RailBlock>
+  {/snippet}
+
+  {#snippet action()}
+    <RailAction
+      progress={cutter.progress}
+      running={cutter.running}
+      cancelling={cutter.cancelling}
+      warnings={cutter.warnings}
+      requirement={req}
+      label={createLabel(kind)}
+      progressLabel="Clip progress"
+      onstatus={cutter.lastJobId && !cutter.running ? () => openHistory(cutter.lastJobId) : null}
+      onclear={() => cutter.clear()}
+      oncancel={() => cutter.cancel()}
+      onstart={() => cutter.create()}
+    />
+  {/snippet}
+
+  {#snippet after()}
+    <RailError title="Clip creation failed" failure={cutter.failure} ondismiss={() => (cutter.failure = null)} />
+    <RailResults results={cutter.results} savedTo={cutter.savedTo} historyId={cutter.lastJobId} />
+  {/snippet}
+</ToolLayout>
 
 <style>
-  .columns {
+  .stack {
     display: grid;
-    gap: 16px;
-    align-items: start;
+    gap: 8px;
   }
-  @media (min-width: 900px) {
-    .columns {
-      grid-template-columns: minmax(0, 5fr) minmax(0, 4fr);
-    }
-  }
-  .column {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    min-width: 0;
+  .stack .label {
+    font-weight: 600;
   }
   .screen {
     margin-top: 14px;
     aspect-ratio: 16 / 9;
     min-height: 220px;
+    /* The setup column is wide now: cap the player so the Clips table stays in reach. */
+    max-height: min(420px, 50vh);
+    margin-inline: auto;
     border-radius: var(--radius-sm);
     background: var(--surface-sunken);
     border: 1px solid var(--border);
@@ -423,30 +409,5 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
-  }
-  .form {
-    display: grid;
-    grid-template-columns: minmax(110px, 150px) 1fr;
-    gap: 12px 14px;
-    align-items: start;
-  }
-  @media (max-width: 560px) {
-    .form {
-      grid-template-columns: 1fr;
-      gap: 6px;
-    }
-  }
-  .label {
-    padding-top: 7px;
-    font-weight: 600;
-  }
-  .field {
-    min-width: 0;
-  }
-  pre {
-    max-height: 200px;
-    overflow: auto;
-    font-size: 0.8rem;
-    white-space: pre-wrap;
   }
 </style>

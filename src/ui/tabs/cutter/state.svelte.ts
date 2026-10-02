@@ -15,7 +15,9 @@ import type { OutputRef } from "../../../io/sink";
 import { addHistory, historyId, localTimestamp } from "../../../storage/history";
 import type { ToolRequest, Undecodable } from "../../../workers/render-protocol";
 import { jobRecorded } from "../../history.svelte";
+import type { AvailableOutput } from "../../../io/history-outputs";
 import { historyOutputs, notifyFinished, runJob } from "../../job-runner";
+import { jobResults, savedToLabel } from "../../job-results";
 import { OutputFolder } from "../../output-folder.svelte";
 import { app, resetSettings, updateSetting } from "../../state.svelte";
 
@@ -35,6 +37,9 @@ class CutterState {
   pendingSource = $state<string | null>(null);
   /** The last finished job's History id (the progress label links to it). */
   lastJobId = $state<string | null>(null);
+  /** The last job's files, playable in the rail (cleared by Clear and when a job starts). */
+  results = $state.raw<AvailableOutput[]>([]);
+  savedTo = $state("");
   warnings = $state<string[]>([]);
   failure = $state<{ message: string; details: string } | null>(null);
 
@@ -108,6 +113,7 @@ class CutterState {
     this.cancelling = false;
     this.failure = null;
     this.warnings = [];
+    this.results = [];
     this.progress = { percent: 0, status: CLIP_PROGRESS.preparing };
     const s = app.settings;
     // Desktop saves these when the job starts. The source isn't re-openable yet (input persistence).
@@ -139,7 +145,9 @@ class CutterState {
       }
       // Staged copies stay until the next job or app load: deleting them now would cancel the download.
       if (!handle && outputs.length) await deliverStaged(outputs, { zip: s["web/zip_batches"], tool: "Media Cutter" });
-      await this.record(jobId, source.file, clips, outputs, !!handle);
+      const record = await this.record(jobId, source.file, clips, outputs, !!handle);
+      this.results = await jobResults(outputs, record).catch(() => []);
+      this.savedTo = savedToLabel(!!handle, this.folder.ref?.name);
       this.progress = { percent: 100, status: finishedClips(outputs.length) };
       notifyFinished("Clips", outputs.length);
     } catch (error) {
@@ -176,23 +184,26 @@ class CutterState {
     this.worker?.postMessage({ type: "cancel" } satisfies ToolRequest);
   }
 
-  private async record(id: string, source: File, clips: { title: string; start: number; duration: number }[], outputs: OutputRef[], directory: boolean) {
+  private async record(id: string, source: File, clips: { title: string; start: number; duration: number }[], outputs: OutputRef[], directory: boolean): Promise<Record<string, unknown>> {
+    const record = {
+      id,
+      tool: "clips" as const,
+      created: localTimestamp(),
+      source: { name: source.name, size: source.size, lastModified: source.lastModified },
+      output: directory ? $state.snapshot(this.folder.ref) : { name: "Downloads" },
+      clips,
+      outputs: historyOutputs(outputs),
+    };
     try {
-      await addHistory({
-        id,
-        tool: "clips",
-        created: localTimestamp(),
-        source: { name: source.name, size: source.size, lastModified: source.lastModified },
-        output: directory ? $state.snapshot(this.folder.ref) : { name: "Downloads" },
-        clips,
-        outputs: historyOutputs(outputs),
-      });
+      await addHistory(record);
       this.lastJobId = id;
       jobRecorded(id);
     } catch {
       // History is best effort (storage may be unavailable).
     }
+    return record;
   }
+
 
   /** Load Job (spec 07): clip rows and export folder; the source is named for re-selection. */
   loadFromHistory(record: Record<string, unknown>): void {
@@ -215,6 +226,7 @@ class CutterState {
     if (this.running) return;
     this.progress = null;
     this.warnings = [];
+    this.results = [];
     void this.setSource(null);
     this.rows = [emptyClipRow()];
     this.currentKey = null;
