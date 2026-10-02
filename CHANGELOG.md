@@ -6,6 +6,14 @@ policy in `CLAUDE.md` (patch by default, minor/major only when requested).
 
 ## [Unreleased]
 
+## [0.1.13] - 2026-10-02
+
+### Added
+- **Works offline** after the first visit: the whole app, including its workers and codecs, is cached on the device.
+- **Update prompt**: when a new version is ready, "A new version is available — Reload" (it never swaps versions under a running job).
+- **Install app** (on About, where the browser offers it), with a maskable icon and shortcuts to each tool.
+- **Open with MM Toolkit** (installed Chrome/Edge): one audio/video file opens in the Media Cutter, several in the Media Converter.
+
 ## [0.1.12] - 2026-10-02
 
 ### Added

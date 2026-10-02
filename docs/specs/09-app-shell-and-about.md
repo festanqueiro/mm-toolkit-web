@@ -52,4 +52,13 @@ Version semantics: `/^v?(\d+)\.(\d+)\.(\d+)$/` after trimming. Anything else isn
 - Manifest: name "MM Toolkit", icons from `assets/mm-toolkit-icon.png` (generate 192/512 + maskable). Theme colour from tokens.
 - The service worker precaches the app shell. ffmpeg.wasm is cached on first use.
 - File Handling API (Chromium, installed): "Open with MM Toolkit" for audio/video → routes to Converter or Cutter.
+
+### As built
+
+- **Service worker** (`scripts/sw-template.js`, emitted as `sw.js` by a build plugin; `scripts/pwa.ts` builds the list): precaches the app shell (`./`) and every built/public file except the social image and the spike page, in the cache `mm-toolkit-{version}`. Cache-first; any in-scope navigation gets the cached shell. Old versions' caches are deleted on activation. Registered in production builds only, scoped to the base URL.
+- **Updates**: a new version installs and **waits**. The shell shows `A new version is available` + **Reload**, which tells the waiting worker to take over and reloads (the leave-page guard still protects a running job). Checked hourly and when the app returns to the foreground.
+- **Install**: Chromium's install prompt is deferred; About shows **Install app** while it's available.
+- **Manifest**: `id`, maskable 512 px icon (logo on the dark background, inside the safe zone), shortcuts to the three tools, `launch_handler: focus-existing`, and `file_handlers` for every audio/video input extension.
+- **File Handling**: launched files go to the Media Cutter (one usable file) or the Media Converter (several); unsupported files are dropped (`engine/launch.ts`).
+- **App badge**: `History ({n})` mirrors to `navigator.setAppBadge` (spec 07).
 - `navigator.setAppBadge` for unread history.

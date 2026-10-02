@@ -1,4 +1,5 @@
 {
+  "id": "./",
   "name": "MM Toolkit",
   "short_name": "MM Toolkit",
   "description": "Audio & Video tools for all — runs entirely in your browser.",
@@ -7,8 +8,35 @@
   "display": "standalone",
   "background_color": "#0c0e14",
   "theme_color": "#0c0e14",
+  "categories": ["music", "multimedia", "productivity"],
   "icons": [
     { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Video Creator", "url": "./#/video-creator", "icons": [{ "src": "icon-192.png", "sizes": "192x192" }] },
+    { "name": "Media Cutter", "url": "./#/cutter", "icons": [{ "src": "icon-192.png", "sizes": "192x192" }] },
+    { "name": "Media Converter", "url": "./#/converter", "icons": [{ "src": "icon-192.png", "sizes": "192x192" }] }
+  ],
+  "launch_handler": { "client_mode": "focus-existing" },
+  "file_handlers": [
+    {
+      "action": "./",
+      "accept": {
+        "audio/wav": [".wav", ".wave"],
+        "audio/aiff": [".aif", ".aiff"],
+        "audio/flac": [".flac"],
+        "audio/mpeg": [".mp3"],
+        "audio/mp4": [".m4a"],
+        "audio/aac": [".aac"],
+        "audio/ogg": [".ogg"],
+        "video/mp4": [".mp4", ".m4v"],
+        "video/quicktime": [".mov"],
+        "video/x-matroska": [".mkv"],
+        "video/x-msvideo": [".avi"],
+        "video/webm": [".webm"]
+      }
+    }
   ]
 }
