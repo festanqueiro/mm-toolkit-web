@@ -6,6 +6,20 @@ policy in `CLAUDE.md` (patch by default, minor/major only when requested).
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-10-02
+
+### Added
+- Video Creator inputs:
+  - Audio: a file or a folder (direct children only, sorted like the desktop), or drag & drop.
+  - Image or video: validated by actually decoding it, with a thumbnail.
+  - The desktop's status messages.
+- Audio timestamps table: per-track start/duration (kept when the selection changes), ▶/■ snippet preview through Web Audio, and ✨ drop detection with the "Detect drop start" dialog and the remembered lead-in.
+- Requirements line, estimated duration and job estimate, using the desktop's wording.
+- Audio decoding in a Worker at the native sample rate, normalised like the desktop's FFmpeg step. Includes an AIFF/AIFF-C reader.
+
+### Fixed
+- The forced dark theme was missing the warning colour.
+
 ## [0.1.4] - 2026-10-02
 
 ### Added
