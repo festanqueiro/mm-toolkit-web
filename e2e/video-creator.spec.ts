@@ -28,6 +28,15 @@ test("starts with every requirement listed", async ({ page, browserName }) => {
   await expect(page.getByRole("button", { name: "Generate Videos" })).toBeDisabled();
 });
 
+test("each drop zone is named by its section without repeating the heading on screen", async ({ page }) => {
+  for (const name of ["Audio", "Image or video"]) {
+    const section = page.getByRole("region", { name });
+    await expect(section.getByRole("group", { name })).toBeVisible();
+    const titles = await section.getByText(name, { exact: true }).evaluateAll((els) => els.map((el) => el.getBoundingClientRect().height > 1));
+    expect(titles.filter(Boolean)).toHaveLength(1);
+  }
+});
+
 test("audio file + image: statuses, track row and drop detection", async ({ page, browserName }) => {
   await choose(page, "Choose File…", golden("audio/drop-45s-mono.wav"));
   await expect(page.getByTestId("audio-status")).toHaveText("✓ Found 1 audio file.");

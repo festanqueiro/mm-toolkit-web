@@ -187,6 +187,38 @@ test("results revoke their object URLs even when the page is left while files op
   expect(await page.evaluate(() => (window as unknown as { liveUrls: Set<string> }).liveUrls.size)).toBeLessThan(before);
 });
 
+test("a result that can't be opened here says so", async ({ page, browserName }) => {
+  test.skip(browserName !== "chromium", "Opens results from the export folder (Tier 1).");
+  await mockFolderPicker(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/#/converter");
+  const chooser = page.waitForEvent("filechooser");
+  await page.getByRole("button", { name: "Choose Audio or Video Files…" }).click();
+  await (await chooser).setFiles(golden("audio/short-10s-mono.wav"));
+  await page.getByRole("region", { name: "Export" }).getByRole("button", { name: "Choose…" }).click();
+  // The page can no longer read the folder's files (moved, or permission lost).
+  await page.evaluate(() => {
+    FileSystemDirectoryHandle.prototype.getFileHandle = () => Promise.reject(new DOMException("gone", "NotFoundError"));
+  });
+  await page.getByRole("button", { name: "Convert Files" }).click();
+  await expect(page.getByTestId("progress-status")).toHaveText("Finished 1 conversion", { timeout: 60_000 });
+  const results = page.getByRole("complementary", { name: "Output" }).getByRole("list", { name: "Results" });
+  await expect(results.getByRole("listitem")).toHaveCount(1);
+  await expect(results).toContainText("short-10s-mono.mp3");
+  await expect(results).toContainText("Can't be opened here. See History.");
+  await expect(results.getByRole("button", { name: "Download" })).toHaveCount(0);
+});
+
+test("focus in the action follows it across the narrow-screen breakpoint", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/#/converter");
+  await page.getByRole("complementary", { name: "Output" }).getByRole("button", { name: "Clear" }).focus();
+  await page.setViewportSize({ width: 900, height: 900 });
+  await expect(page.getByTestId("action-bar").getByRole("button", { name: "Clear" })).toBeFocused();
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await expect(page.getByRole("complementary", { name: "Output" }).getByRole("button", { name: "Clear" })).toBeFocused();
+});
+
 test("narrow screens: one column, the action in a bottom bar, no overflow", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 800 });
   await page.goto("/#/converter");

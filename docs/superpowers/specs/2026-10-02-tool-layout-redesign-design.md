@@ -1,6 +1,6 @@
 # Tool layout redesign: setup + output rail
 
-Date: 2026-10-02 · Status: approved design, awaiting spec review
+Date: 2026-10-02 · Status: implemented (0.1.18–0.1.22)
 
 ## Intent
 
@@ -70,22 +70,22 @@ Top to bottom; blocks a tool doesn't need are omitted.
 
 | Component | Purpose | Interface |
 |---|---|---|
-| `ToolLayout.svelte` | Header + responsive `setup \| rail` grid; sticky rail; narrow-screen stacking + bottom bar | props `title`, `subtitle`, `icon`; snippets `setup`, `rail`, `bar` (bottom-bar content on narrow screens) |
-| `SetupSection.svelte` | Section card | props `title`, `status?`, `statusTone?` (`ok`/`warn`); snippet `children` |
+| `ToolLayout.svelte` | Header + responsive `setup \| rail` grid; sticky rail; narrow-screen stacking + bottom bar | props `title`, `subtitle`, `icon`; snippets `setup`, `rail` (Preview/Export blocks), `action` (rendered once: in the rail when wide, in the bottom bar when narrow; focus follows it across the breakpoint), `after` (error + results) |
+| `SetupSection.svelte` | Section card | props `title`, `status?`, `tone?` (`ok`/`warn`/`muted`, default `muted`); snippet `children` |
 | `RailBlock.svelte` | A titled block in the rail (Preview, Export, Results) | props `title`; snippet `children` |
 | `RailAction.svelte` | Requirements, primary button, progress, Cancel, warnings, Clear | same props as today's `JobFooter` (`progress`, `running`, `cancelling`, `warnings`, `requirement`, `label`, `progressLabel`, `onstart`, `oncancel`, `onclear`, `onstatus`) |
 | `RailError.svelte` | Inline failure card | props `title`, `failure: {message, details} \| null`, `ondismiss` |
 | `RailResults.svelte` | Results list with players and Download | props `results: AvailableOutput[]`, `savedTo: string`, `historyId: string \| null` |
 
-- `RailResults` owns its object URLs (created on demand, revoked on change and destroy). It's generalised from the Stem Splitter's results list.
+- `RailResults` owns its object URLs (created on demand, revoked on change and destroy, never created after teardown). It's generalised from the Stem Splitter's results list. One row per name (the Overwrite policy can repeat a name). An output that can't be opened here stays listed with `Can't be opened here. See History.` and no player or Download.
 - Removed when unused: `JobFooter.svelte`, and `Accordion.svelte` (tool pages were its only users).
 
 ## Results data flow
 
 - New helper `src/ui/job-results.ts`:
-  - `jobResults(outputs: OutputRef[], record) → Promise<AvailableOutput[]>`: in-memory outputs directly (their `File`), otherwise `resolveOutputs(record)` (folder handles, kept OPFS copies).
+  - `jobResults(outputs: OutputRef[], record) → Promise<AvailableOutput[]>`: in-memory outputs directly (their `File`), otherwise `resolveOutputs(record)` (folder handles, kept OPFS copies). Every output is returned in job order; one that can't be found gets an `open()` that rejects.
   - This is the Stem Splitter's current logic, moved and shared.
-- Each tool's state gains `results = $state.raw<AvailableOutput[]>([])` and `savedTo`, set when a job finishes **before** delivering staged downloads, and cleared on Clear and when a job starts.
+- Each tool's state gains `results = $state.raw<AvailableOutput[]>([])` and `savedTo`, set when a job finishes, **after** delivering staged downloads and recording History (so a failed delivery shows only the error), and cleared on Clear and when a job starts. `lastJobId` is reset when a job starts, so `Open in History` only links to a recorded job; Clear also dismisses the error card.
 - A staged copy may be cleared at the next app load when "keep copies" is off; the Results list is per session, so that's fine (History shows what still exists).
 
 ## Accessibility
