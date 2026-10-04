@@ -1,10 +1,11 @@
 <script lang="ts">
   /**
-   * Waveform timeline for audio sources (spec 05). Click or drag to seek. Each clip is a region;
-   * the current clip's edges are handles that can be dragged, or moved with the arrow keys.
+   * Audio waveform with regions (specs 04, 05). Each clip is a region; the current one's edges
+   * are handles that can be dragged, or moved with the arrow keys. With `onseek` it is also a
+   * timeline: click or drag to seek, and the played part is tinted up to the playhead.
    */
-  import { regionAt, type ClipRegion } from "../../../engine/clip-regions";
-  import { formatTimestamp } from "../../../engine/time";
+  import { regionAt, type ClipRegion } from "../../engine/clip-regions";
+  import { formatTimestamp } from "../../engine/time";
 
   type Edge = "start" | "end";
   const EDGES = ["start", "end"] as const;
@@ -12,7 +13,7 @@
   let {
     peaks,
     duration,
-    position,
+    position = 0,
     onseek,
     regions = [],
     currentKey = null,
@@ -23,8 +24,9 @@
   }: {
     peaks: Float32Array;
     duration: number;
-    position: number;
-    onseek: (seconds: number) => void;
+    position?: number;
+    /** Makes the waveform a seekable timeline with a playhead. */
+    onseek?: (seconds: number) => void;
     regions?: ClipRegion[];
     /** The region that gets the handles. */
     currentKey?: string | null;
@@ -66,7 +68,7 @@
     const rest = style.getPropertyValue("--border-strong").trim();
     const columns = peaks.length / 2;
     const mid = height / 2;
-    const head = duration > 0 ? (position / duration) * width : 0;
+    const head = onseek && duration > 0 ? (position / duration) * width : -1;
     for (let x = 0; x < width; x++) {
       const c = Math.min(columns - 1, Math.floor((x / width) * columns));
       const lo = peaks[c * 2]!;
@@ -74,6 +76,7 @@
       ctx.fillStyle = x <= head ? played : rest;
       ctx.fillRect(x, mid - hi * mid, 1, Math.max(1, (hi - lo) * mid));
     }
+    if (head < 0) return;
     ctx.fillStyle = style.getPropertyValue("--text").trim();
     ctx.fillRect(Math.min(width - 1, head), 0, 1, height);
   });
@@ -86,7 +89,7 @@
   let seeking = false;
   function seekTo(event: PointerEvent) {
     if (!canvas || !duration) return;
-    onseek(Math.max(0, Math.min(duration, secondsAt(event))));
+    onseek?.(Math.max(0, Math.min(duration, secondsAt(event))));
   }
 
   /** The edge being dragged, and how far from it the pointer grabbed the handle. */
@@ -109,6 +112,7 @@
   <canvas
     bind:this={canvas}
     bind:clientWidth={width}
+    class:seekable={!!onseek}
     data-testid="waveform"
     aria-hidden="true"
     onpointerdown={(e) => {
@@ -173,6 +177,8 @@
     width: 100%;
     height: 100%;
     border-radius: inherit;
+  }
+  canvas.seekable {
     cursor: pointer;
     touch-action: none;
   }

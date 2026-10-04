@@ -101,7 +101,7 @@ Cutting still works even when preview doesn't.
 
 ### Waveform clip regions (web only)
 
-**Deviation from desktop**, which has no waveform. Every audio source shows one above the timeline (`ui/tabs/cutter/Waveform.svelte`; rules in `engine/clip-regions.ts`).
+**Deviation from desktop**, which has no waveform. Every audio source shows one above the timeline (`ui/components/Waveform.svelte`, shared with the Video Creator's snippet waveform; rules in `engine/clip-regions.ts`).
 
 - **Peaks.** The media Worker streams the file once into min/max peaks (`peaks` op, 1200 columns; nothing held whole). When the native element plays the source, the peaks load after its metadata, **Worker only**: if the Worker can't decode the codec there is no waveform (the Web Audio route would hold the whole file decoded) and everything else works as before. The fallback audio player keeps its Web Audio last resort.
 - **Loading.** An empty box of the waveform's size holds its place until the peaks arrive, so the controls below never jump.

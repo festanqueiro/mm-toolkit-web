@@ -28,7 +28,12 @@
     </thead>
     <tbody>
       {#each vc.rows as row, index (row.key)}
-        <tr>
+        <tr
+          class:current={vc.rows.length > 1 && index === vc.selectedIndex}
+          data-selected={index === vc.selectedIndex}
+          onfocusin={() => (vc.selectedKey = row.key)}
+          onpointerdown={() => (vc.selectedKey = row.key)}
+        >
           <td class="name" title={row.name}>{row.name}</td>
           <td>
             <div class="start">
@@ -112,8 +117,16 @@
     padding: 6px 10px;
     vertical-align: middle;
   }
+  tbody tr {
+    box-shadow: inset 3px 0 0 transparent;
+  }
   tbody tr:nth-child(even) {
     background: var(--surface-alt);
+  }
+  /* The track on the waveform and in the preview (only marked when there is a choice). */
+  tbody tr.current {
+    background: var(--accent-soft);
+    box-shadow: inset 3px 0 0 var(--accent);
   }
   .name {
     max-width: 200px;
