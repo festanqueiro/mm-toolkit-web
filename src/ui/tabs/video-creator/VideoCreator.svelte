@@ -70,11 +70,8 @@
   );
 
   // ---- Audio / visual selection ----
-  async function chooseAudioFile() {
-    vc.setAudio(await pickFiles({ accept: audioAccept }));
-  }
-  async function chooseAudioFolder() {
-    vc.setAudio(await pickFiles({ directory: true }));
+  async function chooseAudioFiles() {
+    vc.setAudio(await pickFiles({ accept: audioAccept, multiple: true }));
   }
   async function chooseVisual() {
     const picked = await pickFiles({ accept: visualAccept });
@@ -134,11 +131,10 @@
           <span class="zone-file" title={vc.audio.label}>{vc.audio.label}</span>
           <p class="status" class:ok={musicOk} class:warn={!musicOk} data-testid="audio-status">{audioStatus(vc.trackCount, true)}</p>
         {:else}
-          <span class="zone-hint" class:reselect={vc.pendingAudio} data-testid="audio-hint">{vc.pendingAudio ? reselectHint([vc.pendingAudio]) : "Drop an audio file or a folder here"}</span>
+          <span class="zone-hint" class:reselect={vc.pendingAudio} data-testid="audio-hint">{vc.pendingAudio ? reselectHint([vc.pendingAudio]) : "Drop audio files or a folder here"}</span>
         {/if}
         {#snippet actions()}
-          <button type="button" class="btn" disabled={vc.running} onclick={chooseAudioFile}>Choose File…</button>
-          <button type="button" class="btn" disabled={vc.running} onclick={chooseAudioFolder}>Choose Folder…</button>
+          <button type="button" class="btn" disabled={vc.running} onclick={chooseAudioFiles}>Choose File(s)…</button>
         {/snippet}
       </DropZone>
     </SetupSection>

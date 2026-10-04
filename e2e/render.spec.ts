@@ -10,7 +10,7 @@ async function setUp(page: Page, browserName: string, duration = "2") {
   if (browserName === "chromium") await mockFolderPicker(page);
   await page.goto("/#/video-creator");
   let chooser = page.waitForEvent("filechooser");
-  await page.getByRole("region", { name: "Audio" }).getByRole("button", { name: "Choose File…" }).click();
+  await page.getByRole("region", { name: "Audio" }).getByRole("button", { name: "Choose File(s)…" }).click();
   await (await chooser).setFiles(golden("audio/drop-30s-stereo.wav"));
   chooser = page.waitForEvent("filechooser");
   await page.getByRole("region", { name: "Image or video" }).getByRole("button", { name: "Choose…", exact: true }).click();
@@ -73,7 +73,7 @@ test("cancel stops the job and leaves no partial file", async ({ page, browserNa
   await page.getByRole("button", { name: "Generate Video" }).click();
   await expect(page.getByTestId("progress-status")).toHaveText(/Rendering drop-30s-stereo\.wav/, { timeout: 60_000 });
   // Inputs are locked while the job runs (a changed source would mismatch the job's History record).
-  await expect(page.getByRole("region", { name: "Audio" }).getByRole("button", { name: "Choose Folder…" })).toBeDisabled();
+  await expect(page.getByRole("region", { name: "Audio" }).getByRole("button", { name: "Choose File(s)…" })).toBeDisabled();
   await expect(page.getByRole("region", { name: "Image or video" }).getByRole("button", { name: "Choose…", exact: true })).toBeDisabled();
   await expect(page.getByLabel("Start for track 1")).toBeDisabled();
   await expect(page.getByLabel("Duration for track 1 in seconds")).toBeDisabled();
@@ -109,7 +109,7 @@ test("a video visual loops its frames and can mix in its own sound", async ({ pa
   if (browserName === "chromium") await mockFolderPicker(page);
   await page.goto("/#/video-creator");
   let chooser = page.waitForEvent("filechooser");
-  await page.getByRole("region", { name: "Audio" }).getByRole("button", { name: "Choose File…" }).click();
+  await page.getByRole("region", { name: "Audio" }).getByRole("button", { name: "Choose File(s)…" }).click();
   await (await chooser).setFiles(golden("audio/short-10s-mono.wav"));
   chooser = page.waitForEvent("filechooser");
   await page.getByRole("region", { name: "Image or video" }).getByRole("button", { name: "Choose…", exact: true }).click();

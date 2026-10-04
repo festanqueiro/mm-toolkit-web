@@ -73,7 +73,7 @@ All cases: `fixtures/golden/golden.json → pure.formatTimestamp` / `pure.parseT
 | Desktop | Web |
 |---|---|
 | `QFileDialog.getOpenFileName(s)` | `<input type=file [multiple] accept=…>`; `showOpenFilePicker` (Chromium, gives persistable handles); drag & drop (`DataTransferItem.getAsFileSystemHandle()` on Chromium) |
-| `getExistingDirectory` (audio folder) | `showDirectoryPicker({mode:"read"})` (Chromium) or `<input webkitdirectory>` (all). **Depth-1 filter** for parity |
+| `getExistingDirectory` (audio folder) | No folder picker: **Choose File(s)…** is a multi-select `<input type=file>` (spec 04). A dropped folder is read to **depth 1** for parity |
 | Absolute path strings | `FileRef` objects (see [11](11-data-model-and-persistence.md)) |
 
 ## Where files go — the **Sink** abstraction

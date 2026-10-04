@@ -8,7 +8,7 @@ const media = (name: string) => fileURLToPath(new URL(`../fixtures/media/${name}
 /** Click a picker button in the Audio or Image or video section and answer the file chooser. */
 async function choose(page: Page, button: string, files: string | string[]) {
   const chooser = page.waitForEvent("filechooser");
-  const region = /File|Folder/.test(button) ? "Audio" : "Image or video";
+  const region = /File/.test(button) ? "Audio" : "Image or video";
   await page.getByRole("region", { name: region }).getByRole("button", { name: button, exact: true }).click();
   await (await chooser).setFiles(files);
 }
@@ -38,7 +38,7 @@ test("each drop zone is named by its section without repeating the heading on sc
 });
 
 test("audio file + image: statuses, track row and drop detection", async ({ page, browserName }) => {
-  await choose(page, "Choose File…", golden("audio/drop-45s-mono.wav"));
+  await choose(page, "Choose File(s)…", golden("audio/drop-45s-mono.wav"));
   await expect(page.getByTestId("audio-status")).toHaveText("✓ Found 1 audio file.");
   await expect(page.getByRole("button", { name: "Generate Video" })).toBeVisible();
 
@@ -63,7 +63,7 @@ test("audio file + image: statuses, track row and drop detection", async ({ page
 });
 
 test("lead-in is remembered and applied", async ({ page }) => {
-  await choose(page, "Choose File…", golden("audio/drop-30s-stereo.wav"));
+  await choose(page, "Choose File(s)…", golden("audio/drop-30s-stereo.wav"));
   await page.getByRole("button", { name: "Detect drop for this track" }).click();
   await page.getByLabel("Start before the drop").fill("5");
   await page.getByRole("button", { name: "Analyze" }).click();
@@ -71,7 +71,7 @@ test("lead-in is remembered and applied", async ({ page }) => {
 
   await waitForStored(page, "promo/drop_lead_in", 5);
   await page.reload();
-  await choose(page, "Choose File…", golden("audio/drop-30s-stereo.wav"));
+  await choose(page, "Choose File(s)…", golden("audio/drop-30s-stereo.wav"));
   await page.getByRole("button", { name: "Detect drop for this track" }).click();
   await expect(page.getByLabel("Start before the drop")).toHaveValue("5");
   await page.getByRole("button", { name: "Cancel" }).click();
@@ -79,7 +79,7 @@ test("lead-in is remembered and applied", async ({ page }) => {
 });
 
 test("invalid start blocks Generate and preview", async ({ page }) => {
-  await choose(page, "Choose File…", golden("audio/short-10s-mono.wav"));
+  await choose(page, "Choose File(s)…", golden("audio/short-10s-mono.wav"));
   await page.getByLabel("Start for track 1").fill("1:75");
   await expect(page.getByTestId("requirements")).toContainText("Track 1: Invalid timestamp: 1:75");
 
@@ -91,7 +91,7 @@ test("invalid start blocks Generate and preview", async ({ page }) => {
 });
 
 test("preview plays the snippet and toggles off", async ({ page }) => {
-  await choose(page, "Choose File…", golden("audio/short-10s-mono.wav"));
+  await choose(page, "Choose File(s)…", golden("audio/short-10s-mono.wav"));
   await page.getByLabel("Start for track 1").fill("2");
   const play = page.getByRole("button", { name: "Play preview for short-10s-mono.wav" });
   await expect(play).toHaveAttribute("title", "Listen from 2 for 60 seconds");
@@ -103,17 +103,16 @@ test("preview plays the snippet and toggles off", async ({ page }) => {
   await expect(play).toHaveAttribute("aria-pressed", "false");
 });
 
-test("folder selection keeps direct audio children in name order", async ({ page }) => {
-  const chooser = page.waitForEvent("filechooser");
-  await page.getByRole("region", { name: "Audio" }).getByRole("button", { name: "Choose Folder…" }).click();
-  await (await chooser).setFiles(golden("audio"));
-  await expect(page.getByTestId("audio-status")).toHaveText("✓ Found 3 audio files.");
-  await expect(page.locator("td.name")).toHaveText(["drop-30s-stereo.wav", "drop-45s-mono.wav", "short-10s-mono.wav"]);
-  await expect(page.getByRole("button", { name: "Generate Videos" })).toBeVisible();
+test("several files can be chosen at once, listed in name order", async ({ page }) => {
+  await choose(page, "Choose File(s)…", [golden("audio/short-10s-mono.wav"), golden("audio/drop-30s-stereo.wav")]);
+  await expect(page.getByTestId("audio-status")).toHaveText("✓ Found 2 audio files.");
+  await expect(page.locator(".zone-file")).toHaveText("2 files");
+  await expect(page.locator("td.name")).toHaveText(["drop-30s-stereo.wav", "short-10s-mono.wav"]);
+  await expect(page.getByRole("button", { name: "Choose Folder…" })).toHaveCount(0);
 });
 
 test("AIFF audio is accepted and analysed", async ({ page }) => {
-  await choose(page, "Choose File…", media("short-10s-mono.aiff"));
+  await choose(page, "Choose File(s)…", media("short-10s-mono.aiff"));
   await page.getByRole("button", { name: "Detect drop for this track" }).click();
   await page.getByRole("button", { name: "Analyze" }).click();
   // Desktop short-track quirk: the 10 s fixture proposes 9.5 − 2.0 → 00:00:08 (banker's rounding of 7.5).
@@ -133,7 +132,7 @@ test("visual validation messages", async ({ page }) => {
 });
 
 async function ready(page: Page, audio = "audio/drop-45s-mono.wav") {
-  await choose(page, "Choose File…", golden(audio));
+  await choose(page, "Choose File(s)…", golden(audio));
   await choose(page, "Choose…", golden("frames/input.png"));
   await expect(page.getByTestId("visual-status")).toHaveText("✓ Image ready.");
 }

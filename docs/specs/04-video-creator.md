@@ -8,7 +8,7 @@ The shared tool layout (spec [09 › Tool layout](09-app-shell-and-about.md#tool
 
 **Setup column** (sections, in order)
 
-1. **Audio**: path row with **Choose File…** and **Choose Folder…**. Status line below. Section status: `✓ {n} track(s)`.
+1. **Audio**: path row with **Choose File(s)…**. Status line below. Section status: `✓ {n} track(s)`. **Deviation from desktop**: desktop had **Choose File…** (one file) and **Choose Folder…**; the web has one multi-select button. Several picked files are listed like a folder's (audio extensions only, case-folded name order) and the row shows `{n} files`. Dropping a folder still works (hint: `Drop audio files or a folder here`).
 2. **Image or video**: path row with **Choose…**, a 104×104 thumbnail (94×94 image, aspect kept; a video shows its first frame), and a status line.
 3. **Track timings** (shown once audio is found; section status `{n} track(s)`)
    - Table, one row per track: **Audio** (file name, tooltip = full name) | **Start** (text field, placeholder `HH:MM:SS`, default `00:00:00`, plus ✨ button) | **Duration** (number, 1–3600 s, 1 decimal, suffix ` s`, default 60) | **▶/■** preview.
@@ -58,13 +58,13 @@ Sections 4–6 show a quiet status: the enabled effect chain, the background (+ 
 
 ## Inputs
 
-- **Audio**: a single file, or a folder. A folder takes its **direct children only (not recursive)** with an audio extension (`.wav .wave .aif .aiff .flac .mp3 .m4a .aac .ogg`, case-insensitive), **sorted by name, case-insensitive**. Web: `<input webkitdirectory>` returns a recursive listing, so **filter to depth 1** for parity. Also accept drag & drop of files or a folder.
+- **Audio**: one or more files, or a folder. A folder takes its **direct children only (not recursive)** with an audio extension (`.wav .wave .aif .aiff .flac .mp3 .m4a .aac .ogg`, case-insensitive), **sorted by name, case-insensitive**. Web: the picker selects files (several at once, filtered and sorted the same way); a folder arrives by drag & drop only.
 - **Visual**: an image (`.png .jpg .jpeg .webp .tif .tiff`) or a video (`.mp4 .mov .m4v .mkv .avi .webm`). Image validation must actually decode it. Video validation must decode its first frame.
 - **Picker start location**: desktop opens the visual, background and overlay pickers in the audio file's folder. Web (Chromium): pass `startIn` = the audio `FileSystemHandle`. Other browsers: no equivalent, so skip.
 
 ### Implementation notes (web)
 
-- **Pickers.** A transient `<input type=file>` (`webkitdirectory` for folders) works in every engine. Folder drops read the dropped directory's direct children. Handle-based pickers (persistable on Chromium) arrive with input persistence.
+- **Pickers.** A transient `<input type=file>` works in every engine. Folder drops read the dropped directory's direct children. Handle-based pickers (persistable on Chromium) arrive with input persistence.
 - **Decoding** (`engine/media/audio-decode.ts`, in `workers/media.worker.ts`):
   - Native sample rate, stereo-ised and 16-bit quantised like the desktop's FFmpeg step.
   - Mediabunny for WAV/MP3/AAC/M4A/FLAC/OGG, plus a TS reader for AIFF/AIFF-C (Mediabunny has no AIFF demuxer).
