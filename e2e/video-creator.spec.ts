@@ -28,6 +28,11 @@ test("starts with every requirement listed", async ({ page, browserName }) => {
   await expect(page.getByRole("button", { name: "Generate Videos" })).toBeDisabled();
 });
 
+test("the image or video is chosen first, then the audio", async ({ page }) => {
+  const top = async (name: string) => (await page.getByRole("region", { name, exact: true }).boundingBox())!.y;
+  expect(await top("Image or video")).toBeLessThan(await top("Audio"));
+});
+
 test("each drop zone is named by its section without repeating the heading on screen", async ({ page }) => {
   for (const name of ["Audio", "Image or video"]) {
     const section = page.getByRole("region", { name });

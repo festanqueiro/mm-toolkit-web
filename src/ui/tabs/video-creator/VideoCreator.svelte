@@ -124,21 +124,6 @@
 
 <ToolLayout title="Video Creator" {subtitle} icon="music_video">
   {#snippet setup()}
-    <SetupSection title="Audio" status={musicOk ? `✓ ${trackWord}` : ""} tone="ok">
-      <DropZone title="Audio" titleHidden filled={musicOk} disabled={vc.running} ondropped={dropAudio}>
-        {#snippet icon()}<span class="tile" aria-hidden="true"><Icon name={vc.audio?.folder ? "folder_open" : "audiotrack"} size={26} /></span>{/snippet}
-        {#if vc.audio}
-          <span class="zone-file" title={vc.audio.label}>{vc.audio.label}</span>
-          <p class="status" class:ok={musicOk} class:warn={!musicOk} data-testid="audio-status">{audioStatus(vc.trackCount, true)}</p>
-        {:else}
-          <span class="zone-hint" class:reselect={vc.pendingAudio} data-testid="audio-hint">{vc.pendingAudio ? reselectHint([vc.pendingAudio]) : "Drop audio files or a folder here"}</span>
-        {/if}
-        {#snippet actions()}
-          <button type="button" class="btn" disabled={vc.running} onclick={chooseAudioFiles}>Choose File(s)…</button>
-        {/snippet}
-      </DropZone>
-    </SetupSection>
-
     <SetupSection title="Image or video">
       <DropZone title="Image or video" titleHidden filled={visualOk} disabled={vc.running} ondropped={dropVisual}>
         {#snippet icon()}
@@ -158,6 +143,21 @@
         {/if}
         {#snippet actions()}
           <button type="button" class="btn" disabled={vc.running} onclick={chooseVisual}>Choose…</button>
+        {/snippet}
+      </DropZone>
+    </SetupSection>
+
+    <SetupSection title="Audio" status={musicOk ? `✓ ${trackWord}` : ""} tone="ok">
+      <DropZone title="Audio" titleHidden filled={musicOk} disabled={vc.running} ondropped={dropAudio}>
+        {#snippet icon()}<span class="tile" aria-hidden="true"><Icon name={vc.audio?.folder ? "folder_open" : "audiotrack"} size={26} /></span>{/snippet}
+        {#if vc.audio}
+          <span class="zone-file" title={vc.audio.label}>{vc.audio.label}</span>
+          <p class="status" class:ok={musicOk} class:warn={!musicOk} data-testid="audio-status">{audioStatus(vc.trackCount, true)}</p>
+        {:else}
+          <span class="zone-hint" class:reselect={vc.pendingAudio} data-testid="audio-hint">{vc.pendingAudio ? reselectHint([vc.pendingAudio]) : "Drop audio files or a folder here"}</span>
+        {/if}
+        {#snippet actions()}
+          <button type="button" class="btn" disabled={vc.running} onclick={chooseAudioFiles}>Choose File(s)…</button>
         {/snippet}
       </DropZone>
     </SetupSection>
