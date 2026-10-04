@@ -43,6 +43,8 @@ test("dragging the handles on the waveform writes the clip's Start and End", asy
   await expect(page.getByLabel("End for clip 1")).toHaveValue("00:00:05");
   await dragTo(page, page.getByRole("slider", { name: "Start of Clip 01" }), 0.21);
   await expect(page.getByLabel("Start for clip 1")).toHaveValue("00:00:02");
+  // Dragging a handle must not select page content: WebKit would then drag the selection, not the handle.
+  expect(await page.evaluate(() => getSelection()!.type)).not.toBe("Range");
   expect(await regionSpans(page)).toEqual([[0.2, 0.5]]);
   await expect(page.getByTestId("clip-status")).toHaveText("✓ 1 clip ready.");
 

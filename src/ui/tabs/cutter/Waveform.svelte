@@ -164,6 +164,9 @@
     border-radius: var(--radius-sm);
     background: var(--surface-sunken);
     border: 1px solid var(--border);
+    /* A drag here moves a handle or the playhead; it must never select (WebKit then drags the selection instead). */
+    -webkit-user-select: none;
+    user-select: none;
   }
   canvas {
     display: block;
