@@ -9,6 +9,7 @@ Two columns (≈ 5 : 4).
 **Left — Input** (group box)
 - **Source media**: path row (audio + video extensions) and status.
 - Video preview surface: shown only for video sources. 16:9 responsive, aspect kept, min 360×220.
+- Waveform: shown only for audio sources (web only, see [Waveform clip regions](#waveform-clip-regions-web-only)).
 - Timeline: seek slider + `HH:MM:SS / HH:MM:SS` label.
 - Transport row: **▶ Play / Pause** · `Editing: {clip title}` label (bold) · stretch · **Set Start** · **Set End**.
 
@@ -25,6 +26,7 @@ Two columns (≈ 5 : 4).
 
 - **Set Start / Set End** writes `formatTimestamp(playerPosition)` into the current row's Start/End. If no row is current, use row 0.
 - **Clip preview ▶** seeks to start, plays, and stops at `start + duration`. Dragging the timeline, editing that row's timing, or toggling the button stops it.
+- **Waveform handles** edit the same Start/End fields (see [Waveform clip regions](#waveform-clip-regions-web-only)).
 - **Video first-frame priming**: desktop briefly plays muted to show the first frame after loading. Web: setting `currentTime = 0` and waiting for `loadeddata` is enough.
 - **Clip resolution** (per row, `clip_request`):
   - Start is required, else `enter a start timestamp.`
@@ -89,13 +91,29 @@ The job runs in `workers/job.worker.ts` (`engine/render/clips.ts` over the share
 
 `<video>`/`<audio>` can't play every source in every browser (MKV/AVI generally, AIFF outside Safari, some Ogg in Safari). The native element is tried first; it counts as failed on an `error` event, or for video when metadata loads with no picture (`videoWidth === 0`). Then (`ui/tabs/cutter/players.svelte.ts`):
 
-1. **Audio → waveform.** The media Worker streams the file once into min/max peaks (`peaks` op; nothing held whole). Playback decodes ~10 s spans around the playhead in the Worker and schedules them back to back with Web Audio. Click or drag the waveform to seek; the range input stays the accessible timeline.
+1. **Audio → chunked Web Audio.** Playback decodes ~10 s spans around the playhead in the Worker and schedules them back to back with Web Audio. The waveform (below) is drawn from this player's own peaks.
 2. **Video → decoded frames.** Mediabunny `CanvasSink` draws the frame at the playhead (≤ 640 px wide) on a canvas, latest request wins. Playback follows the same chunked audio clock, with the soundtrack when it decodes.
 3. If neither works: `This browser can't preview {name}. You can still type timestamps and create clips.`
 
 While the fallback loads: `Preparing a preview of {name}…`. Without an audio output device (headless, muted systems) the clock falls back to wall time, as in the Video Creator's live preview. AIFF is read by byte range (header chunks + the span needed), so long AIFF mixes never load whole.
 
 Cutting still works even when preview doesn't.
+
+### Waveform clip regions (web only)
+
+**Deviation from desktop**, which has no waveform. Every audio source shows one above the timeline (`ui/tabs/cutter/Waveform.svelte`; rules in `engine/clip-regions.ts`).
+
+- **Peaks.** The media Worker streams the file once into min/max peaks (`peaks` op, 1200 columns; nothing held whole). When the native element plays the source, the peaks load after its metadata, **Worker only**: if the Worker can't decode the codec there is no waveform (the Web Audio route would hold the whole file decoded) and everything else works as before. The fallback audio player keeps its Web Audio last resort.
+- **Loading.** An empty box of the waveform's size holds its place until the peaks arrive, so the controls below never jump.
+- **Seek.** Click or drag the waveform to seek; the range input stays the accessible timeline.
+- **Regions.** Each row that resolves to a clip starting inside the track is a shaded region, start → `min(start + duration, track end)`. Rows that don't resolve have none. Clicking inside a region makes its row current (and seeks); where regions overlap the current one keeps the click, else the later row wins.
+- **Handles.** The current row's region is accent-coloured with a handle on each edge; with no current row, row 0 has them (like Set Start / Set End) and becomes current when moved. Moving a handle writes `formatTimestamp` of the position, so edges snap to whole seconds and a clip stays ≥ 1 s:
+  - **Start**, row with an End: Start moves alone, at most 1 s before End.
+  - **Start**, row using Duration: the clip slides (Duration is untouched), up to 1 s before the end of the track.
+  - **End**: writes the End field (which then takes over from Duration), from 1 s after Start to the end of the track rounded up.
+  - Moving a handle counts as editing that row's timing (it stops its clip preview). Handles don't move while a job runs.
+- **Keyboard.** Handles are `role="slider"` named `Start of {clip title}` / `End of {clip title}`: ←/↓ and →/↑ move 1 s, with Shift 10 s.
+- There is no zoom: on long sources drag to get close, then type the exact time.
 
 ## Persistence
 

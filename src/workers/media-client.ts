@@ -80,12 +80,15 @@ export function bassEnvelope(file: Blob, range: DecodeRange, fps: number): Promi
   return call("bassEnvelope", { file, range, fps });
 }
 
-/** Waveform peaks for the Cutter's fallback timeline; Web Audio decodes codecs the Worker can't. */
-export async function audioPeaks(file: Blob, columns: number): Promise<{ peaks: Float32Array; duration: number }> {
+/**
+ * Waveform peaks for the Cutter's timeline. Web Audio decodes codecs the Worker can't, but it
+ * holds the whole file decoded: pass `webAudio: false` where that isn't worth it.
+ */
+export async function audioPeaks(file: Blob, columns: number, webAudio = true): Promise<{ peaks: Float32Array; duration: number }> {
   try {
     return await call("peaks", { file, columns });
   } catch (error) {
-    if (!unsupported(error)) throw error;
+    if (!webAudio || !unsupported(error)) throw error;
     const pcm = await decodeWithWebAudio(file);
     const { PeakAccumulator } = await import("../engine/analysis/peaks");
     const acc = new PeakAccumulator(columns, pcm.channels[0]!.length);
