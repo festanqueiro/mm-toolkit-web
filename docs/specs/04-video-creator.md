@@ -12,6 +12,13 @@ The shared tool layout (spec [09 › Tool layout](09-app-shell-and-about.md#tool
 2. **Audio**: path row with **Choose File(s)…**. Status line below. Section status: `✓ {n} track(s)`. **Deviation from desktop**: desktop listed Audio first; the web asks for the image or video first (order only: either can be chosen at any time, and the requirements line keeps the desktop's order). Desktop also had **Choose File…** (one file) and **Choose Folder…**; the web has one multi-select button. Several picked files are listed like a folder's (audio extensions only, case-folded name order) and the row shows `{n} files`. Dropping a folder still works (hint: `Drop audio files or a folder here`).
 3. **Track timings** (shown once audio is found; section status `{n} track(s)`)
    - Table, one row per track: **Audio** (file name, tooltip = full name) | **Start** (text field, placeholder `HH:MM:SS`, default `00:00:00`, plus ✨ button) | **Duration** (number, 1–3600 s, 1 decimal, suffix ` s`, default 60) | **▶/■** preview.
+   - **Selected track** (web only): clicking or focusing a row selects it; the first track is selected to begin with. With several tracks the selected row is highlighted. The Preview block's Track picker is the same selection.
+   - **Snippet waveform** (web only, **deviation from desktop**): under the table, the selected track's waveform (named above it when there are several tracks) with its snippet, Start → `min(Start + Duration, end of file)`, as a region with a handle on each edge. Component `ui/components/Waveform.svelte`, shared with the Media Cutter ([05](05-media-cutter.md#waveform-clip-regions-web-only)); rules in `engine/clip-regions.ts`.
+     - **Start handle** slides the snippet: Start = `formatTimestamp` of the position (whole seconds), at most 1 s before the end of the file; Duration is untouched.
+     - **End handle** writes Duration = position − Start, rounded to one decimal and kept within 1–3600 s and the end of the file.
+     - Handles are `role="slider"` named `Start of {file}` / `End of {file}`: ←/↓ and →/↑ move 1 s, with Shift 10 s. They don't move while a job runs. A Start that doesn't parse, or lies past the end of the file, has no region.
+     - Typing in the fields and ✨ move the region. The waveform is not a seek bar here (there is no whole-file player); the Preview slider seeks within the snippet.
+     - Peaks load for the selected track only (media Worker only, 1200 columns) and are kept per track. An empty box holds the waveform's place while they load; if the Worker can't decode the file there is no waveform.
    - Status line under the table (see Messages).
    - Table style: alternating rows, no grid, hidden row header, rounded 8 px border, bold header. Same style as the Media Cutter table.
 

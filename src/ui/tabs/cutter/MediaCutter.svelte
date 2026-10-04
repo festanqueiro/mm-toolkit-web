@@ -31,7 +31,7 @@
   import { app } from "../../state.svelte";
   import ClipTable from "./ClipTable.svelte";
   import { FramePlayer, NativePlayer, WaveformPlayer, type PreviewPlayer } from "./players.svelte";
-  import Waveform from "./Waveform.svelte";
+  import Waveform from "../../components/Waveform.svelte";
   import { cutter } from "./state.svelte";
 
   $effect(() => {

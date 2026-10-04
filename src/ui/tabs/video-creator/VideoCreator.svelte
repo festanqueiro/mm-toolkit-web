@@ -28,6 +28,7 @@
   import Output from "./Output.svelte";
   import { vc } from "./state.svelte";
   import TrackTable from "./TrackTable.svelte";
+  import TrackWaveform from "./TrackWaveform.svelte";
 
   $effect(() => {
     if (app.settingsLoaded) vc.restore();
@@ -165,6 +166,7 @@
     {#if vc.rows.length}
       <SetupSection title="Track timings" status={trackWord}>
         <TrackTable ondetect={openDropDialog} onpreview={preview} />
+        <TrackWaveform />
         {#if vc.timestampsStatus}
           <p class="status" data-testid="timestamps-status" aria-live="polite">{vc.timestampsStatus}</p>
         {/if}

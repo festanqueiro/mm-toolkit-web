@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clipRegions, dragClipEdge, regionAt } from "../src/engine/clip-regions";
+import { clipRegions, dragClipEdge, dragTrackEdge, regionAt, trackRegion } from "../src/engine/clip-regions";
 
 const row = (key: string, start: string, end: string, duration = "60") => ({ key, title: "", start, end, duration });
 
@@ -81,5 +81,40 @@ describe("regionAt", () => {
   it("where regions overlap, the current one keeps the click; otherwise the later row wins", () => {
     expect(regionAt(regions, 5.5, "a")).toBe("a");
     expect(regionAt(regions, 5.5, null)).toBe("b");
+  });
+});
+
+describe("Video Creator track snippet", () => {
+  const track = (start: string, duration: number) => ({ key: "t", name: "t.wav", start, duration });
+
+  it("region: start → start + duration, drawn up to the end of the file", () => {
+    expect(trackRegion(track("00:00:10", 20), 100)).toEqual({ key: "t", start: 10, end: 30 });
+    expect(trackRegion(track("00:00:10", 60), 45)).toEqual({ key: "t", start: 10, end: 45 });
+  });
+
+  it("no region when Start doesn't parse or is at or past the end of the file", () => {
+    expect(trackRegion(track("abc", 20), 100)).toBeNull();
+    expect(trackRegion(track("50", 20), 45)).toBeNull();
+    expect(trackRegion(track("0", 20), 0)).toBeNull();
+  });
+
+  it("start handle slides the snippet: Start in whole seconds, Duration untouched", () => {
+    expect(dragTrackEdge(track("00:00:10", 20), "start", 12.3, 100)).toEqual({ start: "00:00:12" });
+    expect(dragTrackEdge(track("00:00:10", 20), "start", -3, 100)).toEqual({ start: "00:00:00" });
+    expect(dragTrackEdge(track("00:00:10", 20), "start", 500, 45)).toEqual({ start: "00:00:44" });
+  });
+
+  it("end handle writes Duration to one decimal", () => {
+    expect(dragTrackEdge(track("00:00:10", 20), "end", 31.74, 100)).toEqual({ duration: 21.7 });
+  });
+
+  it("Duration stays within 1 s, the end of the file and 3600 s", () => {
+    expect(dragTrackEdge(track("00:00:10", 20), "end", 5, 100)).toEqual({ duration: 1 });
+    expect(dragTrackEdge(track("00:00:10", 20), "end", 500, 45)).toEqual({ duration: 35 });
+    expect(dragTrackEdge(track("0", 20), "end", 4000, 5000)).toEqual({ duration: 3600 });
+  });
+
+  it("a track whose Start doesn't parse can't be dragged", () => {
+    expect(dragTrackEdge(track("abc", 20), "end", 5, 100)).toBeNull();
   });
 });

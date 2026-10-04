@@ -1,10 +1,12 @@
 /**
- * Clip regions on the Media Cutter's audio waveform (spec 05, web only): where each row's clip
- * sits on the track, and what dragging one of its edges writes back into the row.
+ * Regions on the audio waveforms (web only): where a Media Cutter clip (spec 05) or a Video
+ * Creator track's snippet (spec 04) sits on its file, and what dragging one of its edges
+ * writes back into the row.
  */
 
 import { clipRequest, type ClipRow } from "./clips";
 import { pyRound } from "./py";
+import { MAX_TRACK_DURATION, MIN_TRACK_DURATION, type TrackRow } from "./video-creator";
 import { formatTimestamp, parseTimestamp } from "./time";
 
 /** A row's clip on the track, in seconds. */
@@ -48,4 +50,31 @@ export function dragClipEdge(row: ClipRow, edge: "start" | "end", seconds: numbe
 export function regionAt(regions: ClipRegion[], seconds: number, currentKey: string | null): string | null {
   const under = regions.filter((region) => seconds >= region.start && seconds <= region.end);
   return (under.find((region) => region.key === currentKey) ?? under.at(-1))?.key ?? null;
+}
+
+// ------------------------------------------------------------------ Video Creator
+
+/** A track's snippet on its file (its end clamped to the file), or null when Start doesn't resolve inside it. */
+export function trackRegion(row: TrackRow, duration: number): ClipRegion | null {
+  try {
+    const start = parseTimestamp(row.start);
+    return start < duration ? { key: row.key, start, end: Math.min(duration, start + row.duration) } : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Drag an edge of a track's snippet to `seconds`. The start handle slides the snippet (Start,
+ * whole seconds); the end handle writes Duration with the field's limits and one decimal.
+ */
+export function dragTrackEdge(row: TrackRow, edge: "start" | "end", seconds: number, duration: number): { start: string } | { duration: number } | null {
+  try {
+    const start = parseTimestamp(row.start);
+    if (edge === "start") return { start: formatTimestamp(Math.max(0, Math.min(pyRound(seconds), Math.floor(duration - MIN_CLIP_SECONDS)))) };
+    const length = Math.round((Math.min(seconds, duration) - start) * 10) / 10;
+    return { duration: Math.min(MAX_TRACK_DURATION, Math.max(MIN_TRACK_DURATION, length)) };
+  } catch {
+    return null;
+  }
 }

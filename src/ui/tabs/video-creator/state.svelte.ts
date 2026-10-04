@@ -83,6 +83,8 @@ class VideoCreatorState {
 
   // Generation progress (footer). `status` is the desktop's progress label.
   progress = $state<{ percent: number; status: string; outputs: number } | null>(null);
+  /** The track the waveform and the live preview show (`null`: the first one). */
+  selectedKey = $state<string | null>(null);
   /** Inputs named by Load Job that the user still has to pick (files aren't persisted). */
   pendingAudio = $state<string | null>(null);
   pendingVisual = $state<string | null>(null);
@@ -109,6 +111,14 @@ class VideoCreatorState {
 
   get trackCount() {
     return this.rows.length;
+  }
+
+  get selectedIndex(): number {
+    return Math.max(0, this.rows.findIndex((row) => row.key === this.selectedKey));
+  }
+
+  get selectedRow(): TrackRow | null {
+    return this.rows[this.selectedIndex] ?? null;
   }
 
   fileFor(key: string): File | undefined {
@@ -436,6 +446,7 @@ class VideoCreatorState {
     this.stopLivePreview?.();
     this.audio = null;
     this.rows = [];
+    this.selectedKey = null;
     this.filesByKey = new Map();
     this.timestampsStatus = "";
     void this.setVisual(null);

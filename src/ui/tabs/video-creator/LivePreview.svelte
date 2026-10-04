@@ -14,14 +14,13 @@
   });
   onDestroy(() => preview.dispose());
 
-  let trackIndex = $state(0);
   let time = $state(0);
   let playing = $state(false);
   let loading = $state(false);
   let sceneVersion = $state(0);
   let error = $state("");
 
-  const row = $derived(vc.rows[Math.min(trackIndex, vc.rows.length - 1)] ?? null);
+  const row = $derived(vc.selectedRow);
   const start = $derived.by(() => {
     if (!row) return null;
     try {
@@ -207,7 +206,7 @@
     {#if vc.rows.length > 1}
       <label class="track">
         Track
-        <select class="input" bind:value={trackIndex} disabled={playing}>
+        <select class="input" value={vc.selectedIndex} disabled={playing} onchange={(e) => (vc.selectedKey = vc.rows[Number(e.currentTarget.value)]?.key ?? null)}>
           {#each vc.rows as r, i (r.key)}
             <option value={i}>{i + 1}. {r.name}</option>
           {/each}

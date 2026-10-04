@@ -35,6 +35,7 @@
 - [x] Cutter: player/timeline, Set Start/End, clip table, WAV/AIFF in TS, AAC via WebCodecs (WASM fallback), MP3/FLAC via Mediabunny's WASM encoders, video trim via Mediabunny. OGG is Opus-in-Ogg until ADR-003.
 - [x] Cutter preview fallbacks: waveform + chunked Web Audio for audio, decoded frames for video (no transcoded proxy needed).
 - [x] Cutter waveform for every audio source, with clip regions and draggable start/end handles.
+- [x] Video Creator: the selected track's waveform with its snippet as a draggable region.
 - [x] Converter: the matrix in [06](06-media-converter.md) except AVI output (ADR-004), batch ZIP, resumable page-decode fallback. The Cutter and Converter share `engine/render/transcode.ts`.
 
 ## Phase 4 — Polish → `1.0.0`
