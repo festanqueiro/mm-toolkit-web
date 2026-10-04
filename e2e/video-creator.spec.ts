@@ -215,16 +215,56 @@ test("live preview draws the visual and follows the profile", async ({ page }) =
   expect((await previewPixels(page)).height).toBe(540);
 });
 
-test("live preview plays with audio and stops", async ({ page }) => {
+test("live preview plays with audio and pauses", async ({ page }) => {
   await ready(page, "audio/short-10s-mono.wav");
   const play = page.getByRole("button", { name: "Play preview", exact: true });
   await play.click();
-  const stop = page.getByRole("button", { name: "Stop preview", exact: true });
-  await expect(stop).toHaveAttribute("aria-pressed", "true");
-  await expect(stop).toBeEnabled();
+  const pause = page.getByRole("button", { name: "Pause preview", exact: true });
+  await expect(pause).toHaveAttribute("aria-pressed", "true");
+  await expect(pause).toBeEnabled();
   await expect(page.getByTestId("preview-time")).toHaveText("00:00:01", { timeout: 5000 });
-  await stop.click();
+  await pause.click();
   await expect(play).toBeVisible();
+});
+
+test("live preview plays from the slider position", async ({ page }) => {
+  await ready(page, "audio/short-10s-mono.wav");
+  await page.getByLabel("Preview position").fill("5");
+  await expect(page.getByTestId("preview-time")).toHaveText("00:00:05");
+  await page.getByRole("button", { name: "Play preview", exact: true }).click();
+  // From 0 this label would need ~6 s to get here.
+  await expect(page.getByTestId("preview-time")).toHaveText("00:00:06", { timeout: 4000 });
+  await expect(page.getByRole("button", { name: "Pause preview", exact: true })).toBeVisible();
+});
+
+test("seeking the live preview while it plays continues from the new position", async ({ page }) => {
+  await ready(page, "audio/short-10s-mono.wav");
+  await page.getByRole("button", { name: "Play preview", exact: true }).click();
+  await expect(page.getByTestId("preview-time")).toHaveText("00:00:01", { timeout: 5000 });
+  await page.getByLabel("Preview position").fill("7");
+  await expect(page.getByRole("button", { name: "Pause preview", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId("preview-time")).toHaveText("00:00:08", { timeout: 4000 });
+});
+
+test("pausing the live preview keeps its position; at the end, play starts over", async ({ page }) => {
+  await ready(page, "audio/short-10s-mono.wav");
+  const play = page.getByRole("button", { name: "Play preview", exact: true });
+  const time = page.getByTestId("preview-time");
+  await page.getByLabel("Preview position").fill("4");
+  await play.click();
+  await expect(time).toHaveText("00:00:05", { timeout: 4000 });
+  await page.getByRole("button", { name: "Pause preview", exact: true }).click();
+  await expect(play).toBeVisible();
+  await expect(time).toHaveText(/00:00:0[56]/);
+  await play.click();
+  await expect(time).toHaveText("00:00:07", { timeout: 4000 });
+
+  // Run to the end: the position stays there, and Play restarts the snippet.
+  await page.getByLabel("Preview position").fill("9.5");
+  await expect(play).toBeVisible({ timeout: 5000 });
+  await expect(time).toHaveText("00:00:10");
+  await play.click();
+  await expect(time).toHaveText("00:00:01", { timeout: 4000 });
 });
 
 test("Clear resets inputs and effects", async ({ page }) => {

@@ -178,7 +178,11 @@ The desktop uses libx264 with **CRF 14–30 (default 18)** and **preset ultrafas
 
 ## Live preview (new)
 
-Implemented as the **Preview** block at the top of the output rail, so it stays visible while effects are edited. It has ▶/■, a position slider and, with several tracks, a Track picker.
+Implemented as the **Preview** block at the top of the output rail, so it stays visible while effects are edited. It has ▶/⏸, a position slider and, with several tracks, a Track picker.
+
+- **Seeking.** The slider is the snippet's seek bar (`0` → its duration, one frame per step). Play starts from the slider position, on a frame boundary: audio, picture, bass envelope and fades are all taken at that offset, so the preview at `t` equals the render at `t`. Moving the slider while playing holds playback and shows the frame under the thumb; releasing it (or an arrow key) carries on from there.
+- **Pause** keeps the position and Play resumes from it. When the snippet ends the position stays at the end; Play from the last frame starts over.
+- The snippet's audio is decoded once and reused until the track, its Start or its Duration changes.
 
 - Effects run through the same `GlEffectRenderer` as the render, and bass strength comes from the snippet's envelope, computed in the Worker.
 - Layer fitting uses the browser's 2D canvas scaling at preview size, not the Pillow-exact CPU path. That's fast, and identical to the eye.

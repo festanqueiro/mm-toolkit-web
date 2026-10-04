@@ -100,39 +100,73 @@
     preview.renderAt(Math.floor(t * p.fps) / p.fps, p).catch(() => {});
   });
 
-  // ---- Playback ----
-  async function togglePlay() {
-    if (playing) {
-      preview.stop();
-      playing = false;
-      return;
-    }
+  // ---- Playback: from the slider position; the slider seeks while it plays ----
+  type Pcm = Awaited<ReturnType<typeof decodeAudioFile>>;
+  /** The decoded snippet, kept so seeking doesn't decode it again. */
+  let decoded: { id: string; pcm: Pcm } | null = null;
+  /** Bumped by every play and pause, so a superseded run can't touch the state. */
+  let run = 0;
+  /** A seek paused the playback: resume when the slider is released. */
+  let resume = false;
+
+  function pause() {
+    run++;
+    preview.stop();
+    playing = false;
+    loading = false;
+  }
+
+  async function play() {
     const file = row ? vc.fileFor(row.key) : undefined;
     if (!row || !file || start === null) return;
+    const mine = ++run;
     vc.stopPreview();
-    loading = true;
     error = "";
     try {
-      const pcm = await decodeAudioFile(file, { start, duration: row.duration });
-      loading = false;
+      const id = `${row.key}|${start}|${row.duration}`;
+      if (decoded?.id !== id) {
+        loading = true;
+        const pcm = await decodeAudioFile(file, { start, duration: row.duration });
+        if (mine !== run) return;
+        decoded = { id, pcm };
+        loading = false;
+      }
+      const p = params();
+      // On the last frame (or past it), start over.
+      const from = time >= p.duration - 1 / p.fps ? 0 : time;
       playing = true;
-      vc.stopLivePreview = () => {
-        preview.stop();
-        playing = false;
-      };
-      await preview.play(pcm, params(), vc.audioFade, (t) => (time = t));
+      vc.stopLivePreview = pause;
+      const finished = await preview.play(decoded.pcm, p, vc.audioFade, from, (t) => mine === run && (time = t));
+      if (mine === run && finished) time = p.duration;
     } catch (e) {
-      error = `Preview unavailable: ${(e as Error).message}`;
+      if (mine === run) error = `Preview unavailable: ${(e as Error).message}`;
     } finally {
-      loading = false;
-      playing = false;
+      if (mine === run) {
+        loading = false;
+        playing = false;
+      }
     }
   }
 
+  /** The slider moved: while playing, hold playback and show the frames under the thumb. */
+  function seek(value: number) {
+    if (playing) {
+      resume = true;
+      pause();
+    }
+    time = value;
+  }
+  /** The slider was released (or a key moved it): carry on from there. */
+  function seeked() {
+    if (!resume) return;
+    resume = false;
+    void play();
+  }
+
   $effect(() => {
-    if (vc.running && playing) {
-      preview.stop();
-      playing = false;
+    if (vc.running && (playing || resume)) {
+      resume = false;
+      pause();
     }
   });
 </script>
@@ -151,12 +185,12 @@
       <button
         type="button"
         class="btn icon"
-        aria-label={playing ? "Stop preview" : "Play preview"}
+        aria-label={playing ? "Pause preview" : "Play preview"}
         aria-pressed={playing}
         disabled={!row || start === null || loading || vc.running}
-        onclick={togglePlay}
+        onclick={() => (playing ? pause() : play())}
       >
-        <Icon name={playing ? "stop" : "play_arrow"} />
+        <Icon name={playing ? "pause" : "play_arrow"} />
       </button>
       <input
         type="range"
@@ -164,8 +198,9 @@
         max={duration}
         step={1 / vc.fps}
         aria-label="Preview position"
-        disabled={playing}
-        bind:value={time}
+        value={time}
+        oninput={(e) => seek(Number(e.currentTarget.value))}
+        onchange={seeked}
       />
       <span class="time" data-testid="preview-time">{formatTimestamp(time)}</span>
     </div>
