@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   audioFilesFromFile,
   audioFilesInFolder,
+  audioSelectionLabel,
   audioStatus,
   dropFailedStatus,
   dropProposedStatus,
@@ -34,6 +35,16 @@ describe("audio selection (find_audio_files)", () => {
   it("single file: accepted only with an audio extension", () => {
     expect(audioFilesFromFile({ name: "Track.WAVE" })).toHaveLength(1);
     expect(audioFilesFromFile({ name: "video.mp4" })).toEqual([]);
+  });
+
+  it("several picked files: audio only, case-folded name order", () => {
+    const picked = [{ name: "b.MP3" }, { name: "notes.txt" }, { name: "A.wav" }];
+    expect(audioFilesInFolder(picked).map((e) => e.name)).toEqual(["A.wav", "b.MP3"]);
+  });
+
+  it("selection label: the file's name, or a count for several", () => {
+    expect(audioSelectionLabel(["Track.wav"])).toBe("Track.wav");
+    expect(audioSelectionLabel(["b.mp3", "a.wav", "c.flac"])).toBe("3 files");
   });
 
   it("status and button label", () => {

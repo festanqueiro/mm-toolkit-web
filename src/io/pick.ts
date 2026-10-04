@@ -1,6 +1,6 @@
 /**
- * File and folder selection that works in every engine (spec 10): a transient
- * `<input type=file>` (with `webkitdirectory` for folders) and drag & drop.
+ * File selection that works in every engine (spec 10): a transient `<input type=file>`,
+ * and drag & drop (which also takes a folder).
  * Handle-based pickers (persistable on Chromium) arrive with input persistence.
  */
 
@@ -10,22 +10,19 @@ export type Picked = { files: PickedFile[]; folder: string | null };
 const EMPTY: Picked = { files: [], folder: null };
 
 /** Open the browser's picker. Resolves with nothing picked when the user cancels. */
-export function pickFiles(options: { accept?: string; multiple?: boolean; directory?: boolean } = {}): Promise<Picked> {
+export function pickFiles(options: { accept?: string; multiple?: boolean } = {}): Promise<Picked> {
   return new Promise((resolve) => {
     const input = document.createElement("input");
     input.type = "file";
     if (options.accept) input.accept = options.accept;
     input.multiple = !!options.multiple;
-    if (options.directory) input.webkitdirectory = true;
     input.style.display = "none";
     const done = (picked: Picked) => {
       input.remove();
       resolve(picked);
     };
     input.addEventListener("change", () => {
-      const files = [...(input.files ?? [])].map((file) => ({ file, relativePath: file.webkitRelativePath || undefined }));
-      const folder = options.directory ? (files[0]?.relativePath?.split("/")[0] ?? null) : null;
-      done({ files, folder });
+      done({ files: [...(input.files ?? [])].map((file) => ({ file })), folder: null });
     });
     input.addEventListener("cancel", () => done(EMPTY));
     document.body.append(input);

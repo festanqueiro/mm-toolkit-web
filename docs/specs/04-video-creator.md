@@ -8,8 +8,8 @@ The shared tool layout (spec [09 › Tool layout](09-app-shell-and-about.md#tool
 
 **Setup column** (sections, in order)
 
-1. **Audio**: path row with **Choose File…** and **Choose Folder…**. Status line below. Section status: `✓ {n} track(s)`.
-2. **Image or video**: path row with **Choose…**, a 104×104 thumbnail (94×94 image, aspect kept; a video shows its first frame), and a status line.
+1. **Image or video**: path row with **Choose…**, a 104×104 thumbnail (94×94 image, aspect kept; a video shows its first frame), and a status line.
+2. **Audio**: path row with **Choose File(s)…**. Status line below. Section status: `✓ {n} track(s)`. **Deviation from desktop**: desktop listed Audio first; the web asks for the image or video first (order only: either can be chosen at any time, and the requirements line keeps the desktop's order). Desktop also had **Choose File…** (one file) and **Choose Folder…**; the web has one multi-select button. Several picked files are listed like a folder's (audio extensions only, case-folded name order) and the row shows `{n} files`. Dropping a folder still works (hint: `Drop audio files or a folder here`).
 3. **Track timings** (shown once audio is found; section status `{n} track(s)`)
    - Table, one row per track: **Audio** (file name, tooltip = full name) | **Start** (text field, placeholder `HH:MM:SS`, default `00:00:00`, plus ✨ button) | **Duration** (number, 1–3600 s, 1 decimal, suffix ` s`, default 60) | **▶/■** preview.
    - Status line under the table (see Messages).
@@ -58,13 +58,13 @@ Sections 4–6 show a quiet status: the enabled effect chain, the background (+ 
 
 ## Inputs
 
-- **Audio**: a single file, or a folder. A folder takes its **direct children only (not recursive)** with an audio extension (`.wav .wave .aif .aiff .flac .mp3 .m4a .aac .ogg`, case-insensitive), **sorted by name, case-insensitive**. Web: `<input webkitdirectory>` returns a recursive listing, so **filter to depth 1** for parity. Also accept drag & drop of files or a folder.
+- **Audio**: one or more files, or a folder. A folder takes its **direct children only (not recursive)** with an audio extension (`.wav .wave .aif .aiff .flac .mp3 .m4a .aac .ogg`, case-insensitive), **sorted by name, case-insensitive**. Web: the picker selects files (several at once, filtered and sorted the same way); a folder arrives by drag & drop only.
 - **Visual**: an image (`.png .jpg .jpeg .webp .tif .tiff`) or a video (`.mp4 .mov .m4v .mkv .avi .webm`). Image validation must actually decode it. Video validation must decode its first frame.
 - **Picker start location**: desktop opens the visual, background and overlay pickers in the audio file's folder. Web (Chromium): pass `startIn` = the audio `FileSystemHandle`. Other browsers: no equivalent, so skip.
 
 ### Implementation notes (web)
 
-- **Pickers.** A transient `<input type=file>` (`webkitdirectory` for folders) works in every engine. Folder drops read the dropped directory's direct children. Handle-based pickers (persistable on Chromium) arrive with input persistence.
+- **Pickers.** A transient `<input type=file>` works in every engine. Folder drops read the dropped directory's direct children. Handle-based pickers (persistable on Chromium) arrive with input persistence.
 - **Decoding** (`engine/media/audio-decode.ts`, in `workers/media.worker.ts`):
   - Native sample rate, stereo-ised and 16-bit quantised like the desktop's FFmpeg step.
   - Mediabunny for WAV/MP3/AAC/M4A/FLAC/OGG, plus a TS reader for AIFF/AIFF-C (Mediabunny has no AIFF demuxer).
@@ -178,7 +178,11 @@ The desktop uses libx264 with **CRF 14–30 (default 18)** and **preset ultrafas
 
 ## Live preview (new)
 
-Implemented as the **Preview** block at the top of the output rail, so it stays visible while effects are edited. It has ▶/■, a position slider and, with several tracks, a Track picker.
+Implemented as the **Preview** block at the top of the output rail, so it stays visible while effects are edited. It has ▶/⏸, a position slider and, with several tracks, a Track picker.
+
+- **Seeking.** The slider is the snippet's seek bar (`0` → its duration, one frame per step). Play starts from the slider position, on a frame boundary: audio, picture, bass envelope and fades are all taken at that offset, so the preview at `t` equals the render at `t`. Moving the slider while playing holds playback and shows the frame under the thumb; releasing it (or an arrow key) carries on from there.
+- **Pause** keeps the position and Play resumes from it. When the snippet ends the position stays at the end; Play from the last frame starts over.
+- The snippet's audio is decoded once and reused until the track, its Start or its Duration changes.
 
 - Effects run through the same `GlEffectRenderer` as the render, and bass strength comes from the snippet's envelope, computed in the Worker.
 - Layer fitting uses the browser's 2D canvas scaling at preview size, not the Pillow-exact CPU path. That's fast, and identical to the eye.

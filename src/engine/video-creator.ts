@@ -34,6 +34,9 @@ export function audioFilesInFolder<T extends { name: string; relativePath?: stri
 /** `find_audio_files` for a single file: itself if it has an audio extension. */
 export const audioFilesFromFile = <T extends { name: string }>(file: T): T[] => (isAudioName(file.name) ? [file] : []);
 
+/** What the Audio zone shows for picked files: the file's name, or `{n} files` for several (web). */
+export const audioSelectionLabel = (names: string[]) => (names.length === 1 ? names[0]! : `${names.length} files`);
+
 export type VisualKind = "image" | "video";
 
 /** Which validator applies to a visual, by extension (`validate_visual`). */

@@ -118,7 +118,7 @@ test("Load Job restores the Converter's format and the Video Creator's per-track
 
   // Video Creator: one track starting at 27 s, 1 s long.
   await page.goto("/#/video-creator");
-  await pick(page, "Choose File…", golden("audio/drop-30s-stereo.wav"));
+  await pick(page, "Choose File(s)…", golden("audio/drop-30s-stereo.wav"));
   const chooser = page.waitForEvent("filechooser");
   await page.getByRole("region", { name: "Image or video" }).getByRole("button", { name: "Choose…", exact: true }).click();
   await (await chooser).setFiles(media("visual-320x240.png"));
@@ -152,7 +152,7 @@ test("Load Job restores the Converter's format and the Video Creator's per-track
   await expect(page).toHaveURL(/#\/video-creator$/);
   await expect(page.getByTestId("audio-hint")).toHaveText("Re-select drop-30s-stereo.wav");
   await expect(page.getByTestId("visual-hint")).toHaveText("Re-select visual-320x240.png");
-  await pick(page, "Choose File…", golden("audio/drop-30s-stereo.wav"));
+  await pick(page, "Choose File(s)…", golden("audio/drop-30s-stereo.wav"));
   await expect(page.getByTestId("timestamps-status")).toHaveText("✓ Loaded saved per-track timings.");
   await expect(page.getByLabel("Start for track 1")).toHaveValue("00:00:27");
   await expect(page.getByLabel("Duration for track 1 in seconds")).toHaveValue("1");

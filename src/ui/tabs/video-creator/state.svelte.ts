@@ -10,6 +10,7 @@ import { formatTimestamp, parseTimestamp } from "../../../engine/time";
 import {
   audioFilesFromFile,
   audioFilesInFolder,
+  audioSelectionLabel,
   dropAnalysingStatus,
   dropFailedStatus,
   dropProposedStatus,
@@ -114,14 +115,16 @@ class VideoCreatorState {
     return this.filesByKey.get(key);
   }
 
-  /** Apply a picked audio file or folder (`find_audio_files` semantics). */
+  /** Apply picked audio files or a dropped folder (`find_audio_files` semantics). */
   setAudio(picked: Picked): void {
     if (!picked.files.length && !picked.folder) return;
     this.stopPreview();
-    const files = picked.folder
-      ? audioFilesInFolder(picked.files.map((p) => ({ name: p.file.name, relativePath: p.relativePath, file: p.file }))).map((p) => p.file)
-      : picked.files.flatMap((p) => audioFilesFromFile(p.file));
-    const label = picked.folder ?? picked.files[0]?.file.name ?? "";
+    // Several picked files are listed like a folder's: audio only, in name order.
+    const files =
+      picked.folder || picked.files.length > 1
+        ? audioFilesInFolder(picked.files.map((p) => ({ name: p.file.name, relativePath: p.relativePath, file: p.file }))).map((p) => p.file)
+        : picked.files.flatMap((p) => audioFilesFromFile(p.file));
+    const label = picked.folder ?? audioSelectionLabel(picked.files.map((p) => p.file.name));
     this.audio = { label, folder: !!picked.folder, files };
     this.filesByKey = new Map(files.map((file) => [trackIdentity(file), file]));
     const saved = this.savedRows;

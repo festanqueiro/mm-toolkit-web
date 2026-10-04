@@ -78,7 +78,7 @@ export class LivePreview {
   private videoBox: [number, number, number, number] = [0, 0, 0, 0];
   private sceneToken = 0;
   private audio: AudioContext | null = null;
-  private playback: { source: AudioBufferSourceNode; stopped: boolean } | null = null;
+  private playback: { source: AudioBufferSourceNode; stopped: boolean; ended: boolean } | null = null;
 
   constructor() {
     this.canvas = document.createElement("canvas");
@@ -180,10 +180,19 @@ export class LivePreview {
     this.draw(frame, t, params);
   }
 
-  /** Play `pcm` (the snippet) with frames following the audio clock; resolves when it ends or stops. */
-  async play(pcm: { sampleRate: number; channels: Float32Array[] }, params: PreviewParams, audioFade: boolean, onTime: (t: number) => void): Promise<void> {
+  /**
+   * Play `pcm` (the snippet) from `from` seconds in, with frames following the audio clock.
+   * Resolves when it ends or stops: true when it ran to the end of the snippet.
+   */
+  async play(
+    pcm: { sampleRate: number; channels: Float32Array[] },
+    params: PreviewParams,
+    audioFade: boolean,
+    from: number,
+    onTime: (t: number) => void,
+  ): Promise<boolean> {
     this.stop();
-    if (!this.scene) return;
+    if (!this.scene) return false;
     this.audio ??= new AudioContext();
     // `resume()` can stay pending forever without an output device; don't wait on it.
     if (this.audio.state === "suspended") await Promise.race([this.audio.resume(), new Promise((r) => setTimeout(r, 300))]);
@@ -195,13 +204,16 @@ export class LivePreview {
     const source = this.audio.createBufferSource();
     source.buffer = buffer;
     source.connect(this.audio.destination);
-    const playback = { source, stopped: false };
+    const playback = { source, stopped: false, ended: false };
     this.playback = playback;
-    const t0 = this.audio.currentTime + 0.05;
-    source.start(t0);
-    source.onended = () => (playback.stopped = true);
-
     const frameCount = Math.max(1, Math.floor(params.duration * params.fps));
+    // Start on a frame boundary, so the picture and the sound leave from the same instant.
+    const first = Math.min(frameCount - 1, Math.max(0, Math.floor(from * params.fps + 1e-6)));
+    const offset = first / params.fps;
+    const t0 = this.audio.currentTime + 0.05;
+    source.start(t0, offset);
+    source.onended = () => (playback.stopped = playback.ended = true);
+
     // Follow the audio clock. If it doesn't move (no output device, e.g. a headless or
     // muted system), fall back to wall time so the picture still plays.
     const audio = this.audio;
@@ -210,16 +222,17 @@ export class LivePreview {
     const clock = () => {
       const wall = performance.now() / 1000 - wallStart;
       if (!stalled && wall > 0.5 && audio.currentTime <= t0) stalled = true;
-      return stalled ? wall : audio.currentTime - t0;
+      return offset + (stalled ? wall : audio.currentTime - t0);
     };
     const nextPaint = () => new Promise((resolve) => requestAnimationFrame(resolve));
     const visualDuration = this.scene.visual.kind === "video" ? this.scene.visual.duration : 0;
     const times = function* () {
-      for (let i = 0; i < frameCount; i++) yield visualDuration ? (i / params.fps) % visualDuration : 0;
+      for (let i = first; i < frameCount; i++) yield visualDuration ? (i / params.fps) % visualDuration : 0;
     };
     const frames$ = this.videoSink ? this.videoSink.canvasesAtTimestamps(times()) : null;
     try {
-      for (let i = 0; i < frameCount && !playback.stopped; i++) {
+      let i = first;
+      for (; i < frameCount && !playback.stopped; i++) {
         const t = i / params.fps;
         const frame = frames$ ? ((await frames$.next()).value?.canvas as Drawable | undefined) ?? null : this.stillVisual;
         while (!playback.stopped && clock() < t) await nextPaint();
@@ -229,6 +242,7 @@ export class LivePreview {
         this.draw(frame, t, params);
         onTime(t);
       }
+      return i >= frameCount || playback.ended;
     } finally {
       await frames$?.return(undefined);
       if (this.playback === playback) this.stop();

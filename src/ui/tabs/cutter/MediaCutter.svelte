@@ -1,10 +1,12 @@
 <script lang="ts">
   import { untrack } from "svelte";
+  import { clipRegions, dragClipEdge } from "../../../engine/clip-regions";
   import {
     clipRequest,
     clipRequests,
     clipRequirements,
     clipStatus,
+    clipTitle,
     CLIPS_DOWNLOADS,
     createLabel,
     editingLabel,
@@ -14,6 +16,7 @@
   import { AUDIO_EXTENSIONS, VIDEO_EXTENSIONS } from "../../../engine/media-kind";
   import { formatTimestamp } from "../../../engine/time";
   import { pickFiles } from "../../../io/pick";
+  import { audioPeaks } from "../../../workers/media-client";
   import Icon from "../../Icon.svelte";
   import DropZone from "../../components/DropZone.svelte";
   import ExportFolder from "../../components/ExportFolder.svelte";
@@ -74,11 +77,21 @@
   let clipError = $state<string | null>(null);
   let frame = 0;
   let token = 0;
+  /** Waveform peaks for audio the native element plays (the fallback player brings its own). */
+  let nativePeaks = $state.raw<Float32Array | null>(null);
+  let peaksFailed = $state(false);
 
   const position = $derived(player?.position ?? 0);
   const duration = $derived(player?.duration ?? 0);
   const playing = $derived(player?.playing ?? false);
   const ready = $derived(sourceOk && !!player && duration > 0);
+
+  // ---- Waveform: every clip is a region; the current row's edges can be dragged (spec 05) ----
+  const peaks = $derived(player instanceof WaveformPlayer ? player.peaks : nativePeaks);
+  const regions = $derived(clipRegions(cutter.rows, duration));
+  /** The row the handles edit: the current one, else row 0 (like Set Start / Set End). */
+  const handleIndex = $derived(Math.max(0, cutter.currentIndex));
+  const handleRow = $derived(cutter.rows[handleIndex] ?? null);
 
   // A new source resets the player.
   $effect(() => {
@@ -89,8 +102,27 @@
       player?.destroy();
       player = null;
       fallback = "none";
+      nativePeaks = null;
+      peaksFailed = false;
     });
   });
+
+  /**
+   * The native element plays this audio: draw its waveform too. Worker only: without a
+   * decoder there it would take the whole file decoded on the page, so the waveform is skipped.
+   */
+  async function loadPeaks() {
+    const source = cutter.source;
+    if (!source?.ok) return;
+    const mine = token;
+    try {
+      const { peaks } = await audioPeaks(source.file, 1200, false);
+      if (mine === token) nativePeaks = peaks;
+    } catch {
+      // No waveform; the fields and the timeline still work.
+      if (mine === token) peaksFailed = true;
+    }
+  }
 
   // The native element, once rendered.
   $effect(() => {
@@ -182,6 +214,16 @@
     if (clipPreview?.key === key) stopClip();
   }
 
+  /** A handle on the waveform moved: write the row's Start or End. */
+  function moveEdge(edge: "start" | "end", seconds: number) {
+    const row = handleRow;
+    const patch = row && dragClipEdge($state.snapshot(row), edge, seconds, duration);
+    if (!row || !patch) return;
+    cutter.currentKey = row.key;
+    cutter.updateRow(row.key, patch);
+    onEdit(row.key);
+  }
+
   $effect(() => () => {
     cancelAnimationFrame(frame);
     player?.destroy();
@@ -232,16 +274,31 @@
                   ></video>
                 </div>
               {:else}
-                <audio bind:this={media} src={cutter.source.url} preload="auto" onerror={useFallback}></audio>
+                <audio bind:this={media} src={cutter.source.url} preload="auto" onloadedmetadata={loadPeaks} onerror={useFallback}></audio>
               {/if}
             {:else if fallback === "ready" && player instanceof FramePlayer}
               <div class="screen">
                 <canvas bind:this={frameCanvas} class="frames" aria-label="Video preview of {cutter.source.file.name}"></canvas>
               </div>
-            {:else if fallback === "ready" && player instanceof WaveformPlayer && player.peaks}
-              <Waveform peaks={player.peaks} {duration} {position} onseek={seek} />
             {/if}
           {/key}
+          {#if kind === "audio" && peaks && duration > 0}
+            <Waveform
+              {peaks}
+              {duration}
+              {position}
+              {regions}
+              currentKey={handleRow?.key ?? null}
+              currentLabel={handleRow ? clipTitle(handleRow.title, handleIndex) : ""}
+              disabled={cutter.running}
+              onseek={seek}
+              onselect={(key) => (cutter.currentKey = key)}
+              onedge={moveEdge}
+            />
+          {:else if kind === "audio" && !peaksFailed && fallback !== "unavailable"}
+            <!-- Hold the waveform's space while it loads, so the controls below don't jump. -->
+            <div class="waveform-pending" data-testid="waveform-pending" aria-hidden="true"></div>
+          {/if}
         </div>
         {#if fallback === "loading"}
           <p class="status" data-testid="preview-status">Preparing a preview of {cutter.source.file.name}…</p>
@@ -352,6 +409,13 @@
       order: -1;
       flex-basis: 100%;
     }
+  }
+  .waveform-pending {
+    height: 120px;
+    margin-top: 14px;
+    border-radius: var(--radius-sm);
+    background: var(--surface-sunken);
+    border: 1px solid var(--border);
   }
   .frames {
     display: block;
