@@ -80,11 +80,11 @@ export function bassEnvelope(file: Blob, range: DecodeRange, fps: number): Promi
   return call("bassEnvelope", { file, range, fps });
 }
 
-/**
- * Waveform peaks for the Cutter's timeline. Web Audio decodes codecs the Worker can't, but it
- * holds the whole file decoded: pass `webAudio: false` where that isn't worth it.
- */
-export async function audioPeaks(file: Blob, columns: number, webAudio = true): Promise<{ peaks: Float32Array; duration: number }> {
+type Peaks = { peaks: Float32Array; duration: number };
+/** Waveforms already worked out, per file: leaving a tool and coming back mustn't decode an hour of audio again. */
+const peaksByFile = new WeakMap<Blob, Map<string, Promise<Peaks>>>();
+
+async function computePeaks(file: Blob, columns: number, webAudio: boolean): Promise<Peaks> {
   try {
     return await call("peaks", { file, columns });
   } catch (error) {
@@ -95,6 +95,25 @@ export async function audioPeaks(file: Blob, columns: number, webAudio = true): 
     acc.add(pcm.channels, 0);
     return { peaks: acc.peaks, duration: pcm.channels[0]!.length / pcm.sampleRate };
   }
+}
+
+/**
+ * Waveform peaks for a timeline, kept for as long as the file is (treat them as read-only).
+ * Web Audio decodes codecs the Worker can't, but it holds the whole file decoded: pass
+ * `webAudio: false` where that isn't worth it.
+ */
+export function audioPeaks(file: Blob, columns: number, webAudio = true): Promise<Peaks> {
+  let known = peaksByFile.get(file);
+  if (!known) peaksByFile.set(file, (known = new Map()));
+  const key = `${columns}|${webAudio}`;
+  let peaks = known.get(key);
+  if (!peaks) {
+    peaks = computePeaks(file, columns, webAudio);
+    known.set(key, peaks);
+    // A failure isn't kept: the next request tries again.
+    peaks.catch(() => known.get(key) === peaks && known.delete(key));
+  }
+  return peaks;
 }
 
 export async function detectDrop(file: Blob): Promise<number> {
