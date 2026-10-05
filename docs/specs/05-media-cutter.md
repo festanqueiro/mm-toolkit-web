@@ -104,7 +104,7 @@ Cutting still works even when preview doesn't.
 **Deviation from desktop**, which has no waveform. Every audio source shows one above the timeline (`ui/components/Waveform.svelte`, shared with the Video Creator's snippet waveform; rules in `engine/clip-regions.ts`).
 
 - **Peaks.** The media Worker streams the file once into min/max peaks (`peaks` op, 1200 columns; nothing held whole). When the native element plays the source, the peaks load after its metadata, **Worker only**: if the Worker can't decode the codec there is no waveform (the Web Audio route would hold the whole file decoded) and everything else works as before. The fallback audio player keeps its Web Audio last resort.
-- **Loading.** An empty box of the waveform's size holds its place until the peaks arrive, so the controls below never jump.
+- **Loading.** An empty box of the waveform's size holds its place until the peaks arrive, so the controls below never jump. Peaks are kept for as long as the page holds the file (`audioPeaks` in `workers/media-client.ts`), so leaving the tool and coming back doesn't decode it again.
 - **Seek.** Click or drag the waveform to seek; the range input stays the accessible timeline.
 - **Regions.** Each row that resolves to a clip starting inside the track is a shaded region, start → `min(start + duration, track end)`. Rows that don't resolve have none. Clicking inside a region makes its row current (and seeks); where regions overlap the current one keeps the click, else the later row wins.
 - **Handles.** The current row's region is accent-coloured with a handle on each edge; with no current row, row 0 has them (like Set Start / Set End) and becomes current when moved. Moving a handle writes `formatTimestamp` of the position, so edges snap to whole seconds and a clip stays ≥ 1 s:
@@ -112,6 +112,7 @@ Cutting still works even when preview doesn't.
   - **Start**, row using Duration: the clip slides (Duration is untouched), up to 1 s before the end of the track.
   - **End**: writes the End field (which then takes over from Duration), from 1 s after Start to the end of the track rounded up.
   - Moving a handle counts as editing that row's timing (it stops its clip preview). Handles don't move while a job runs.
+- **Grabbing a handle.** Each handle is a full-height line with a grip that grows on hover, focus and while dragged. Its grab zone straddles the edge (`handleZones`): 20 px outside the clip and up to 12 px inside it, never more than a third of the clip so the two zones don't overlap, and at least 24 px wide; at an end of the track a zone folds inward and the other one makes room. While a handle is dragged a bubble shows its time (Start's at the top, End's at the bottom).
 - **Keyboard.** Handles are `role="slider"` named `Start of {clip title}` / `End of {clip title}`: ←/↓ and →/↑ move 1 s, with Shift 10 s.
 - There is no zoom: on long sources drag to get close, then type the exact time.
 

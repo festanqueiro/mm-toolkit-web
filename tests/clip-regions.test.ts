@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clipRegions, dragClipEdge, dragTrackEdge, regionAt, trackRegion } from "../src/engine/clip-regions";
+import { clipRegions, dragClipEdge, dragTrackEdge, handleZones, regionAt, trackRegion } from "../src/engine/clip-regions";
 
 const row = (key: string, start: string, end: string, duration = "60") => ({ key, title: "", start, end, duration });
 
@@ -116,5 +116,34 @@ describe("Video Creator track snippet", () => {
 
   it("a track whose Start doesn't parse can't be dragged", () => {
     expect(dragTrackEdge(track("abc", 20), "end", 5, 100)).toBeNull();
+  });
+});
+
+describe("handleZones", () => {
+  it("a zone straddles its edge: mostly outside the clip, partly inside", () => {
+    expect(handleZones(200, 500, 1000)).toEqual({ start: { left: 180, width: 32 }, end: { left: 488, width: 32 } });
+  });
+
+  it("a narrow clip gives each handle a third of it, so the zones never overlap", () => {
+    const { start, end } = handleZones(200, 212, 1000);
+    expect(start).toEqual({ left: 180, width: 24 });
+    expect(end).toEqual({ left: 208, width: 24 });
+    expect(start.left + start.width).toBeLessThanOrEqual(end.left);
+  });
+
+  it("zones fold inward at the ends of the track and stay wide enough to grab", () => {
+    expect(handleZones(0, 1000, 1000)).toEqual({ start: { left: 0, width: 24 }, end: { left: 976, width: 24 } });
+  });
+
+  it("a short clip at the start of the track: the end's zone sits after the start's", () => {
+    const { start, end } = handleZones(0, 9, 1000);
+    expect(start).toEqual({ left: 0, width: 24 });
+    expect(end).toEqual({ left: 24, width: 24 });
+  });
+
+  it("a short clip at the end of the track: the start's zone sits before the end's", () => {
+    const { start, end } = handleZones(991, 1000, 1000);
+    expect(end).toEqual({ left: 976, width: 24 });
+    expect(start).toEqual({ left: 952, width: 24 });
   });
 });
