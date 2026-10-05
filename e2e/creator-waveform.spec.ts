@@ -93,3 +93,64 @@ test("the waveform and the Preview follow the selected track", async ({ page }) 
   await expect(page.getByTestId("track-waveform-name")).toHaveText("drop-30s-stereo.wav");
   await expect(page.locator("tbody tr").nth(0)).toHaveAttribute("data-selected", "true");
 });
+
+test("the waveform is kept while another tab is open, not decoded again", async ({ page }) => {
+  // Count the waveform requests sent to the media Worker.
+  await page.addInitScript(() => {
+    const post = Worker.prototype.postMessage;
+    (window as unknown as { peakRequests: number }).peakRequests = 0;
+    Worker.prototype.postMessage = function (this: Worker, message: { op?: string }, ...rest: unknown[]) {
+      if (message?.op === "peaks") (window as unknown as { peakRequests: number }).peakRequests++;
+      return (post as (...args: unknown[]) => void).call(this, message, ...rest);
+    } as typeof post;
+  });
+  await open(page, ["short-10s-mono.wav"]);
+  await page.getByRole("link", { name: "Media Cutter" }).click();
+  await expect(page.getByTestId("waveform")).toHaveCount(0);
+  await page.getByRole("link", { name: "Video Creator" }).click();
+  await expect(page.getByTestId("waveform")).toBeVisible();
+  await expect(page.getByTestId("clip-region")).toHaveCount(1);
+  expect(await page.evaluate(() => (window as unknown as { peakRequests: number }).peakRequests)).toBe(1);
+});
+
+/** Press at `from` of the waveform's width (plus `nudge` pixels) and release at `to`; `during` runs before the release. */
+async function pressAndDrag(page: Page, from: number, nudge: number, to: number, during?: () => Promise<void>) {
+  await page.getByTestId("waveform").scrollIntoViewIfNeeded();
+  const wave = (await page.getByTestId("waveform").boundingBox())!;
+  const y = wave.y + wave.height / 2;
+  await page.mouse.move(wave.x + wave.width * from + nudge, y);
+  await page.mouse.down();
+  await page.mouse.move(wave.x + wave.width * to + nudge, y, { steps: 5 });
+  await during?.();
+  await page.mouse.up();
+}
+
+test("dragging the snippet itself slides it, keeping its Duration", async ({ page }) => {
+  await open(page, ["short-10s-mono.wav"]);
+  await start(page).fill("2");
+  await duration(page).fill("4");
+  await duration(page).press("Tab");
+  await expect.poll(() => regionSpan(page)).toEqual([0.2, 0.6]);
+  // Grab the middle of the snippet and move it 3 s to the right.
+  await pressAndDrag(page, 0.4, 0, 0.7);
+  await expect(start(page)).toHaveValue("00:00:05");
+  await expect(duration(page)).toHaveValue("4");
+  expect(await regionSpan(page)).toEqual([0.5, 0.9]);
+});
+
+test("a handle is grabbed by pressing just inside the snippet, and shows its value while dragged", async ({ page }) => {
+  await open(page, ["short-10s-mono.wav"]);
+  await start(page).fill("2");
+  await duration(page).fill("6");
+  await duration(page).press("Tab");
+  await expect.poll(() => regionSpan(page)).toEqual([0.2, 0.8]);
+  await pressAndDrag(page, 0.8, -5, 0.6, async () => {
+    await expect(page.getByTestId("handle-time")).toHaveText("4 s");
+  });
+  await expect(duration(page)).toHaveValue("4");
+  await expect(start(page)).toHaveValue("2");
+  await pressAndDrag(page, 0.2, 5, 0.3, async () => {
+    await expect(page.getByTestId("handle-time").first()).toHaveText("00:00:03");
+  });
+  await expect(start(page)).toHaveValue("00:00:03");
+});

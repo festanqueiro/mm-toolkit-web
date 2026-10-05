@@ -78,3 +78,34 @@ export function dragTrackEdge(row: TrackRow, edge: "start" | "end", seconds: num
     return null;
   }
 }
+
+export type HandleZone = { left: number; width: number };
+
+/** How far a handle's grab zone reaches outside its clip, and (at most) inside it, in pixels. */
+const ZONE_OUTSIDE = 20;
+const ZONE_INSIDE = 12;
+const ZONE_MIN = 24;
+
+/**
+ * Where the two handles of a clip can be grabbed, in pixels along a track `width` wide. A zone
+ * straddles its edge: mostly outside the clip, and inside by up to a third of it, so the two
+ * never overlap. At an end of the track a zone folds inward and the other one makes room.
+ */
+export function handleZones(startX: number, endX: number, width: number): { start: HandleZone; end: HandleZone } {
+  const inside = Math.min(ZONE_INSIDE, Math.max(0, endX - startX) / 3);
+  const folded = startX - ZONE_OUTSIDE < 0;
+  let startLeft = Math.max(0, startX - ZONE_OUTSIDE);
+  let startRight = Math.max(startX + inside, startLeft + ZONE_MIN);
+  let endRight = Math.min(width, endX + ZONE_OUTSIDE);
+  let endLeft = Math.min(endX - inside, endRight - ZONE_MIN);
+  if (startRight > endLeft) {
+    if (folded) {
+      endLeft = startRight;
+      endRight = Math.max(endRight, endLeft + ZONE_MIN);
+    } else {
+      startRight = endLeft;
+      startLeft = Math.min(startLeft, startRight - ZONE_MIN);
+    }
+  }
+  return { start: { left: startLeft, width: startRight - startLeft }, end: { left: endLeft, width: endRight - endLeft } };
+}

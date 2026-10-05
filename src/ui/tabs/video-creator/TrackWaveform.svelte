@@ -5,6 +5,7 @@
    */
   import { SvelteMap } from "svelte/reactivity";
   import { dragTrackEdge, trackRegion } from "../../../engine/clip-regions";
+  import { formatTimestamp } from "../../../engine/time";
   import { audioPeaks } from "../../../workers/media-client";
   import Waveform from "../../components/Waveform.svelte";
   import { vc } from "./state.svelte";
@@ -54,6 +55,8 @@
         currentLabel={row.name}
         disabled={vc.running}
         onedge={moveEdge}
+        onmove={(seconds) => moveEdge("start", seconds)}
+        edgeText={(edge, seconds) => (edge === "end" ? `${row.duration} s` : formatTimestamp(seconds))}
       />
     {:else}
       <!-- Hold the waveform's space while it loads, so the controls below don't jump. -->
