@@ -168,8 +168,12 @@
     cancelAnimationFrame(frame);
     const tick = () => {
       if (!clipPreview || !player) return;
-      if (player.now() >= clipPreview.end || !player.playing) {
+      const { end } = clipPreview;
+      const passed = player.now() >= end;
+      if (passed || !player.playing) {
         player.pause();
+        // A late frame runs past the end: leave the playhead on it.
+        if (passed) player.seek(end);
         clipPreview = null;
         return;
       }
