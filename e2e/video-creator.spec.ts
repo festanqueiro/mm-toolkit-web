@@ -1,6 +1,5 @@
 import { fileURLToPath } from "node:url";
 import { expect, test, type Page } from "@playwright/test";
-import { waitForStored } from "./helpers";
 
 const golden = (name: string) => fileURLToPath(new URL(`../fixtures/golden/${name}`, import.meta.url));
 const media = (name: string) => fileURLToPath(new URL(`../fixtures/media/${name}`, import.meta.url));
@@ -42,7 +41,7 @@ test("each drop zone is named by its section without repeating the heading on sc
   }
 });
 
-test("audio file + image: statuses, track row and drop detection", async ({ page, browserName }) => {
+test("audio file + image: statuses and track row", async ({ page, browserName }) => {
   await choose(page, "Choose File(s)…", golden("audio/drop-45s-mono.wav"));
   await expect(page.getByTestId("audio-status")).toHaveText("✓ Found 1 audio file.");
   await expect(page.getByRole("button", { name: "Generate Video" })).toBeVisible();
@@ -54,33 +53,10 @@ test("audio file + image: statuses, track row and drop detection", async ({ page
   await expect(page.getByTestId("requirements")).toHaveText(expected);
 
   await expect(page.getByRole("cell", { name: "drop-45s-mono.wav", exact: true })).toBeVisible();
-  await expect(page.getByTestId("timestamps-status")).toHaveText("Edit start times manually or use ✨ to detect a drop for one track.");
+  await expect(page.getByTestId("timestamps-status")).toHaveText("Edit start times manually or drag the snippet on the waveform.");
   await expect(page.getByTestId("duration-summary")).toHaveText("00:01:00 per video • 00:01:00 combined");
   await expect(page.getByTestId("job-summary")).toHaveText("1 output(s)");
-
-  await page.getByRole("button", { name: "Detect drop for this track" }).click();
-  const dialog = page.getByRole("dialog", { name: "Detect drop start" });
-  await expect(dialog).toContainText("MM Toolkit will analyze drop-45s-mono.wav and propose a start time based on its main drop.");
-  await expect(dialog.getByLabel("Start before the drop")).toHaveValue("2");
-  await dialog.getByRole("button", { name: "Analyze" }).click();
-  await expect(page.getByTestId("timestamps-status")).toHaveText("✓ Proposed 00:00:43 for drop-45s-mono.wav. You can edit or preview it.");
-  await expect(page.getByLabel("Start for track 1")).toHaveValue("00:00:43");
-});
-
-test("lead-in is remembered and applied", async ({ page }) => {
-  await choose(page, "Choose File(s)…", golden("audio/drop-30s-stereo.wav"));
-  await page.getByRole("button", { name: "Detect drop for this track" }).click();
-  await page.getByLabel("Start before the drop").fill("5");
-  await page.getByRole("button", { name: "Analyze" }).click();
-  await expect(page.getByLabel("Start for track 1")).toHaveValue("00:00:25");
-
-  await waitForStored(page, "promo/drop_lead_in", 5);
-  await page.reload();
-  await choose(page, "Choose File(s)…", golden("audio/drop-30s-stereo.wav"));
-  await page.getByRole("button", { name: "Detect drop for this track" }).click();
-  await expect(page.getByLabel("Start before the drop")).toHaveValue("5");
-  await page.getByRole("button", { name: "Cancel" }).click();
-  await expect(page.getByRole("dialog")).toBeHidden();
+  await expect(page.getByLabel("Start for track 1")).toHaveValue("00:00:00");
 });
 
 test("invalid start blocks Generate and preview", async ({ page }) => {
@@ -116,12 +92,15 @@ test("several files can be chosen at once, listed in name order", async ({ page 
   await expect(page.getByRole("button", { name: "Choose Folder…" })).toHaveCount(0);
 });
 
-test("AIFF audio is accepted and analysed", async ({ page }) => {
+test("AIFF audio is accepted and previews", async ({ page }) => {
   await choose(page, "Choose File(s)…", media("short-10s-mono.aiff"));
-  await page.getByRole("button", { name: "Detect drop for this track" }).click();
-  await page.getByRole("button", { name: "Analyze" }).click();
-  // Desktop short-track quirk: the 10 s fixture proposes 9.5 − 2.0 → 00:00:08 (banker's rounding of 7.5).
-  await expect(page.getByLabel("Start for track 1")).toHaveValue("00:00:08");
+  await expect(page.getByTestId("audio-status")).toHaveText("✓ Found 1 audio file.");
+  // Most engines' <audio> can't play AIFF: the preview then decodes the snippet instead.
+  await page.getByRole("button", { name: "Play preview for short-10s-mono.aiff" }).click();
+  const stop = page.getByRole("button", { name: "Stop preview for short-10s-mono.aiff" });
+  await expect(stop).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("dialog", { name: "Preview unavailable" })).toBeHidden();
+  await stop.click();
 });
 
 test("visual validation messages", async ({ page }) => {

@@ -4,8 +4,6 @@ import {
   audioFilesInFolder,
   audioSelectionLabel,
   audioStatus,
-  dropFailedStatus,
-  dropProposedStatus,
   durationSummary,
   formatG,
   generateLabel,
@@ -13,7 +11,6 @@ import {
   mergeTrackRows,
   previewStatus,
   previewTooltip,
-  proposedStart,
   requirements,
   trackOptions,
   visualKind,
@@ -93,15 +90,15 @@ describe("track rows", () => {
 });
 
 describe("requirements line", () => {
-  const base = { trackCount: 1, visualOk: true, outputOk: true, trackError: null, analysing: false, running: false };
+  const base = { trackCount: 1, visualOk: true, outputOk: true, trackError: null, running: false };
 
   it("ready", () => {
     expect(requirements(base)).toEqual({ ready: true, message: "✓ Ready to generate videos." });
   });
 
   it("lists every missing item in desktop order, trailing dots stripped", () => {
-    expect(requirements({ ...base, trackCount: 0, visualOk: false, outputOk: false, analysing: true }).message).toBe(
-      "To enable Generate: choose audio; choose a valid image or video; choose a writable export folder; wait for drop analysis.",
+    expect(requirements({ ...base, trackCount: 0, visualOk: false, outputOk: false }).message).toBe(
+      "To enable Generate: choose audio; choose a valid image or video; choose a writable export folder.",
     );
     expect(requirements({ ...base, trackError: "Track 1: Timestamp cannot be empty." }).message).toBe(
       "To enable Generate: Track 1: Timestamp cannot be empty.",
@@ -131,7 +128,7 @@ describe("estimates", () => {
   });
 });
 
-describe("preview and drop messages", () => {
+describe("preview messages", () => {
   it("formats like Python :g", () => {
     expect(formatG(60)).toBe("60");
     expect(formatG(12.5)).toBe("12.5");
@@ -143,12 +140,5 @@ describe("preview and drop messages", () => {
     expect(previewTooltip({ start: "", duration: 60 })).toBe("Listen from the start time for 60 seconds");
     expect(previewTooltip({ start: "1:05", duration: 12.5 })).toBe("Listen from 1:05 for 12.5 seconds");
     expect(previewStatus("a.wav", 65, 60)).toBe("Listening to a.wav from 00:01:05 for 60 seconds.");
-  });
-
-  it("drop proposals", () => {
-    expect(proposedStart(45, 2)).toBe(43);
-    expect(proposedStart(1, 2)).toBe(0);
-    expect(dropProposedStatus("a.wav", 43)).toBe("✓ Proposed 00:00:43 for a.wav. You can edit or preview it.");
-    expect(dropFailedStatus("boom")).toBe("Drop detection failed: boom. You can still enter the start manually.");
   });
 });

@@ -11,12 +11,8 @@ import {
   audioFilesFromFile,
   audioFilesInFolder,
   audioSelectionLabel,
-  dropAnalysingStatus,
-  dropFailedStatus,
-  dropProposedStatus,
   mergeTrackRows,
   previewStatus,
-  proposedStart,
   OUTPUT_DEFAULTS,
   PROFILES,
   trackOptions,
@@ -41,7 +37,7 @@ import { addHistory, historyId, localTimestamp } from "../../../storage/history"
 import type { RenderRequest } from "../../../workers/render-protocol";
 import type { Picked } from "../../../io/pick";
 import { probeVisual, type VisualProbe } from "../../../io/visual";
-import { decodeAudioFile, detectDrop } from "../../../workers/media-client";
+import { decodeAudioFile } from "../../../workers/media-client";
 import { jobRecorded } from "../../history.svelte";
 import type { AvailableOutput } from "../../../io/history-outputs";
 import { historyOutputs, notifyFinished, runJob } from "../../job-runner";
@@ -58,7 +54,6 @@ class VideoCreatorState {
   visual = $state<VisualProbe | null>(null);
   visualChecking = $state(false);
   timestampsStatus = $state("");
-  analysingKey = $state<string | null>(null);
   previewKey = $state<string | null>(null);
   previewLoading = $state(false);
   /** Set when a job runs (render PR); disables inputs and stops previews. */
@@ -70,7 +65,7 @@ class VideoCreatorState {
   layers = $state.raw<Record<LayerKind, LayerImage>>({ background: emptyLayer(), overlay: emptyLayer() });
 
   // Post-Effects.
-  videoFade = $state(true);
+  videoFade = $state(false);
   audioFade = $state(true);
   muteOriginal = $state(true);
 
@@ -107,6 +102,8 @@ class VideoCreatorState {
 
   private filesByKey = new Map<string, File>();
   private player: AudioPreview | null = null;
+  /** Bumped by every ▶, so a superseded one can't touch the state. */
+  private previewRun = 0;
   private visualToken = 0;
 
   get trackCount() {
@@ -164,7 +161,7 @@ class VideoCreatorState {
     effects.overlay.mediaPath = null;
     effects.background.imagePath = null;
     this.effects = effects;
-    this.videoFade = record.video_fade !== false;
+    this.videoFade = record.video_fade === true;
     this.audioFade = record.audio_fade !== false;
     this.muteOriginal = record.mute_original_video_audio !== false;
     const fps = Number(record.fps);
@@ -213,27 +210,10 @@ class VideoCreatorState {
     if (this.previewKey === key) this.stopPreview();
   }
 
-  /** ✨: analyse one track and propose `max(0, drop − leadIn)` as its start. */
-  async detectDrop(key: string, leadIn: number): Promise<void> {
-    const file = this.filesByKey.get(key);
-    if (!file || this.analysingKey) return;
-    await updateSetting("promo/drop_lead_in", leadIn);
-    this.analysingKey = key;
-    this.timestampsStatus = dropAnalysingStatus(file.name);
-    try {
-      const drop = await detectDrop(file);
-      const start = proposedStart(drop, leadIn);
-      const row = this.rows.find((r) => r.key === key);
-      if (row) row.start = formatTimestamp(start);
-      this.timestampsStatus = dropProposedStatus(file.name, start);
-    } catch (error) {
-      this.timestampsStatus = dropFailedStatus(`${file.name} ${(error as Error).message}`);
-    } finally {
-      this.analysingKey = null;
-    }
-  }
-
-  /** ▶/■: play `[start, start + duration)`; a second click on the playing row stops it. */
+  /**
+   * ▶/■: play `[start, start + duration)`; a second click on the playing row stops it.
+   * The browser's own player goes first: it starts at once, without decoding the snippet.
+   */
   async togglePreview(key: string): Promise<string | null> {
     if (this.previewKey === key) {
       this.stopPreview();
@@ -248,20 +228,28 @@ class VideoCreatorState {
     } catch (error) {
       return (error as Error).message;
     }
+    const duration = row.duration;
     this.stopPreview();
     this.stopLivePreview?.();
+    const run = ++this.previewRun;
+    const current = () => this.previewRun === run && this.previewKey === key;
+    const ended = () => {
+      if (current()) this.previewKey = null;
+    };
     this.previewKey = key;
+    this.timestampsStatus = previewStatus(file.name, start, duration);
+    this.player ??= new AudioPreview();
+    // Nothing is awaited before this: the click has to still count as the user's gesture.
+    if (await this.player.playFile(file, start, duration, ended)) return null;
+    if (!current()) return null;
+    // A format the element can't play (AIFF outside Safari, …): decode the snippet instead.
     this.previewLoading = true;
-    this.timestampsStatus = previewStatus(file.name, start, row.duration);
     try {
-      const pcm = await decodeAudioFile(file, { start, duration: row.duration });
-      if (this.previewKey !== key) return null;
-      this.player ??= new AudioPreview();
-      await this.player.play(pcm, () => {
-        if (this.previewKey === key) this.previewKey = null;
-      });
+      const pcm = await decodeAudioFile(file, { start, duration });
+      if (!current()) return null;
+      await this.player.play(pcm, ended);
     } catch (error) {
-      if (this.previewKey === key) this.previewKey = null;
+      if (current()) this.previewKey = null;
       return `${file.name} ${(error as Error).message}.`;
     } finally {
       this.previewLoading = false;
@@ -272,10 +260,6 @@ class VideoCreatorState {
   stopPreview(): void {
     this.previewKey = null;
     this.player?.stop();
-  }
-
-  get leadIn(): number {
-    return app.settings["promo/drop_lead_in"];
   }
 
   /** Restore saved effects, fades and the export folder once settings have loaded (desktop restores on start). */
@@ -433,7 +417,7 @@ class VideoCreatorState {
   }
 
 
-  /** Clear: inputs, effects and output back to defaults (desktop `clear`). The drop lead-in is kept. */
+  /** Clear: inputs, effects and output back to defaults (desktop `clear`). */
   clear(): void {
     if (this.running) return;
     this.pendingAudio = this.pendingVisual = null;
@@ -453,7 +437,8 @@ class VideoCreatorState {
     this.effects = defaultEffectSettings();
     void this.setLayerImage("background", null);
     void this.setLayerImage("overlay", null);
-    this.videoFade = this.audioFade = this.muteOriginal = true;
+    this.videoFade = false;
+    this.audioFade = this.muteOriginal = true;
     void this.folder.set(app.settings["general/default_output"]);
     this.profile = OUTPUT_DEFAULTS.profile;
     this.fps = OUTPUT_DEFAULTS.fps;
@@ -467,10 +452,45 @@ export type LayerKind = "background" | "overlay";
 export type LayerImage = { file: File | null; image: Image8 | null; error: string; loading: boolean };
 const emptyLayer = (): LayerImage => ({ file: null, image: null, error: "", loading: false });
 
-/** Web Audio playback of a decoded snippet (sample-accurate, any decodable format). */
+/** A snippet preview: the file in an `<audio>` element, or decoded PCM through Web Audio. */
 class AudioPreview {
   private context: AudioContext | null = null;
   private source: AudioBufferSourceNode | null = null;
+  private element: HTMLAudioElement | null = null;
+  private url: string | null = null;
+  private timer = 0;
+
+  /**
+   * Play `[start, start + duration)` of `file` in an `<audio>` element, which streams it, so
+   * nothing is decoded up front. Resolves `false` when the element can't play the file.
+   */
+  playFile(file: File, start: number, duration: number, onEnded: () => void): Promise<boolean> {
+    this.stop();
+    const element = (this.element ??= new Audio());
+    const url = URL.createObjectURL(file);
+    this.url = url;
+    const finish = () => {
+      if (this.url !== url) return;
+      this.stop();
+      onEnded();
+    };
+    element.onended = finish;
+    // The `#t=` fragment starts at `start` where it is honoured; this covers where it isn't.
+    element.onloadedmetadata = () => {
+      if (Math.abs(element.currentTime - start) > 0.05) element.currentTime = start;
+    };
+    element.src = `${url}#t=${start}`;
+    this.timer = window.setInterval(() => {
+      if (element.currentTime >= start + duration) finish();
+    }, 50);
+    return element.play().then(
+      () => true,
+      () => {
+        if (this.url === url) this.stop();
+        return false;
+      },
+    );
+  }
 
   async play(pcm: { sampleRate: number; channels: Float32Array[] }, onEnded: () => void): Promise<void> {
     this.stop();
@@ -491,6 +511,16 @@ class AudioPreview {
   }
 
   stop(): void {
+    if (this.url && this.element) {
+      const element = this.element;
+      window.clearInterval(this.timer);
+      element.onended = element.onloadedmetadata = null;
+      element.pause();
+      element.removeAttribute("src");
+      element.load();
+      URL.revokeObjectURL(this.url);
+      this.url = null;
+    }
     const source = this.source;
     this.source = null;
     if (source) {

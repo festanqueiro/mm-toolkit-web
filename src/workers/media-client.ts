@@ -11,43 +11,48 @@ export class MediaError extends Error {
   }
 }
 
-let worker: Worker | null = null;
+/**
+ * Two workers: a waveform decodes a whole file, and a snippet asked for meanwhile (a preview
+ * the user is waiting on) mustn't queue behind it.
+ */
+type Lane = { name: string; worker: Worker | null; pending: Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }> };
+const lanes = { main: { name: "media", worker: null, pending: new Map() } as Lane, peaks: { name: "media-peaks", worker: null, pending: new Map() } as Lane };
 let nextId = 1;
-const pending = new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }>();
 
-function getWorker(): Worker {
-  if (worker) return worker;
-  worker = new Worker(new URL("./media.worker.ts", import.meta.url), { type: "module", name: "media" });
+function getWorker(lane: Lane): Worker {
+  if (lane.worker) return lane.worker;
+  const worker = new Worker(new URL("./media.worker.ts", import.meta.url), { type: "module", name: lane.name });
+  lane.worker = worker;
   worker.onmessage = (event: MessageEvent<MediaResponse>) => {
     const response = event.data;
-    const entry = pending.get(response.id);
+    const entry = lane.pending.get(response.id);
     if (!entry) return;
-    pending.delete(response.id);
+    lane.pending.delete(response.id);
     if (response.ok) entry.resolve(response.result);
     else entry.reject(new MediaError(response.error.message, response.error.kind));
   };
   worker.onerror = (event) => {
     const error = new MediaError(event.message || "The media worker stopped unexpectedly.", "failed");
-    for (const entry of pending.values()) entry.reject(error);
-    pending.clear();
-    worker?.terminate();
-    worker = null;
+    for (const entry of lane.pending.values()) entry.reject(error);
+    lane.pending.clear();
+    worker.terminate();
+    if (lane.worker === worker) lane.worker = null;
   };
   return worker;
 }
 
 function call<K extends MediaOp>(op: K, args: MediaOps[K]["args"], transfer: Transferable[] = []): Promise<MediaOps[K]["result"]> {
   const id = nextId++;
+  const lane = op === "peaks" ? lanes.peaks : lanes.main;
   return new Promise((resolve, reject) => {
-    pending.set(id, { resolve: resolve as (value: unknown) => void, reject });
-    getWorker().postMessage({ id, op, args }, { transfer });
+    lane.pending.set(id, { resolve: resolve as (value: unknown) => void, reject });
+    getWorker(lane).postMessage({ id, op, args }, { transfer });
   });
 }
 
 /**
  * Last resort for codecs WebCodecs can't decode here: the browser's `decodeAudioData`.
- * It resamples to the context rate (the native rate isn't exposed), so drop detection on
- * this path can differ slightly from the desktop.
+ * It resamples to the context rate (the native rate isn't exposed).
  */
 async function decodeWithWebAudio(file: Blob, range?: DecodeRange): Promise<PcmAudio> {
   const context = new OfflineAudioContext(2, 1, 44_100);
@@ -114,16 +119,6 @@ export function audioPeaks(file: Blob, columns: number, webAudio = true): Promis
     peaks.catch(() => known.get(key) === peaks && known.delete(key));
   }
   return peaks;
-}
-
-export async function detectDrop(file: Blob): Promise<number> {
-  try {
-    return await call("detectDrop", { file });
-  } catch (error) {
-    if (!unsupported(error)) throw error;
-    const pcm = await decodeWithWebAudio(file);
-    return call("detectDropPcm", { pcm }, pcm.channels.map((c) => c.buffer as ArrayBuffer));
-  }
 }
 
 /**

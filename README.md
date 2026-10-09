@@ -16,7 +16,7 @@ The browser edition of [MM Toolkit](https://github.com/festanqueiro/mm-toolkit).
 
 | Tool | What it does |
 |---|---|
-| **Video Creator** | Audio + image or video → ready-to-share MP4s. Per-track start/duration, one-click **drop detection**, a drag-reorderable effect cascade (Overlay, Bass-reactive Blur, Rotate, VHS, Glitch), background/overlay layers, fades, and vertical/square/landscape profiles. New on the web: a **live effect preview**. |
+| **Video Creator** | Audio + image or video → ready-to-share MP4s. Per-track start/duration, a **waveform** to place each snippet, a drag-reorderable effect cascade (Overlay, Bass-reactive Blur, Rotate, VHS, Glitch), background/overlay layers, fades, and vertical/square/landscape profiles. New on the web: a **live effect preview**. |
 | **Media Cutter** | Preview audio or video, mark start/end from the playhead, export multiple titled clips. Audio keeps its source format; video becomes H.264/AAC MP4. |
 | **Media Converter** | Batch-convert audio (MP3, WAV, AIFF, FLAC, M4A, AAC, OGG) or video (MP4, MOV, MKV, AVI, WEBM) with progress and safe cancellation. |
 | **History / Settings** | The last 20 jobs with reload, shared naming templates, export folder and overwrite policy, finish notifications. |

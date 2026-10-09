@@ -18,7 +18,6 @@ export type Settings = {
   "promo/audio_fade": boolean;
   "promo/mute_original_video_audio": boolean;
   "promo/effects_state": string | null;
-  "promo/drop_lead_in": number;
   "clips/source": FileRef | null;
   "clips/output": FileRef | null;
   "web/zip_batches": boolean;
@@ -41,11 +40,10 @@ export const SETTING_DEFAULTS: Readonly<Settings> = Object.freeze({
   music: null,
   cover: null,
   output: null,
-  "promo/video_fade": true,
+  "promo/video_fade": false,
   "promo/audio_fade": true,
   "promo/mute_original_video_audio": true,
   "promo/effects_state": null,
-  "promo/drop_lead_in": 2,
   "clips/source": null,
   "clips/output": null,
   "web/zip_batches": true,

@@ -3,9 +3,7 @@
   import Icon from "../../Icon.svelte";
   import { vc } from "./state.svelte";
 
-  let { ondetect, onpreview }: { ondetect: (key: string) => void; onpreview: (key: string) => void } = $props();
-
-  const dropDisabled = $derived(vc.analysingKey !== null || vc.running);
+  let { onpreview }: { onpreview: (key: string) => void } = $props();
 
   /** QDoubleSpinBox(1–3600, 1 decimal): clamp and round on commit. */
   function commitDuration(key: string, input: HTMLInputElement) {
@@ -45,14 +43,6 @@
                 value={row.start}
                 oninput={(e) => vc.updateRow(row.key, { start: e.currentTarget.value })}
               />
-              <button
-                type="button"
-                class="btn icon"
-                title="Analyze this track and propose a drop start time"
-                aria-label="Detect drop for this track"
-                disabled={dropDisabled}
-                onclick={() => ondetect(row.key)}>✨</button
-              >
             </div>
           </td>
           <td>

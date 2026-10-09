@@ -136,7 +136,7 @@ GL: compute the slice table on the CPU per frame (cheap) and pass it as a unifor
 
 Applied by the render pipeline after the cascade (`engine/effects/fade.ts`):
 
-- **Video fade** (default on): linear fade from black over `fade` seconds at the start and to black at the end (moviepy `FadeIn`/`FadeOut`). `fade = min(0.5, actualDuration / 2)`. The gain is `min(t/fade, 1) × min((duration − t)/fade, 1)` (each factor is 1 outside its window). Applied as `astype(uint8)` of `frame × gain`, so it **truncates**. GL: the `FADE` pass.
+- **Video fade** (default off on the web, on in desktop): linear fade from black over `fade` seconds at the start and to black at the end (moviepy `FadeIn`/`FadeOut`). `fade = min(0.5, actualDuration / 2)`. The gain is `min(t/fade, 1) × min((duration − t)/fade, 1)` (each factor is 1 outside its window). Applied as `astype(uint8)` of `frame × gain`, so it **truncates**. GL: the `FADE` pass.
 - **Audio fade** (default on): the same gain per sample (`t = n / sampleRate`), applied to the **music** track only.
 
 ## Golden fixtures

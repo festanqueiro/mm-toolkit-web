@@ -11,7 +11,7 @@ The shared tool layout (spec [09 › Tool layout](09-app-shell-and-about.md#tool
 1. **Image or video**: path row with **Choose…**, a 104×104 thumbnail (94×94 image, aspect kept; a video shows its first frame), and a status line.
 2. **Audio**: path row with **Choose File(s)…**. Status line below. Section status: `✓ {n} track(s)`. **Deviation from desktop**: desktop listed Audio first; the web asks for the image or video first (order only: either can be chosen at any time, and the requirements line keeps the desktop's order). Desktop also had **Choose File…** (one file) and **Choose Folder…**; the web has one multi-select button. Several picked files are listed like a folder's (audio extensions only, case-folded name order) and the row shows `{n} files`. Dropping a folder still works (hint: `Drop audio files or a folder here`).
 3. **Track timings** (shown once audio is found; section status `{n} track(s)`)
-   - Table, one row per track: **Audio** (file name, tooltip = full name) | **Start** (text field, placeholder `HH:MM:SS`, default `00:00:00`, plus ✨ button) | **Duration** (number, 1–3600 s, 1 decimal, suffix ` s`, default 60) | **▶/■** preview.
+   - Table, one row per track: **Audio** (file name, tooltip = full name) | **Start** (text field, placeholder `HH:MM:SS`, default `00:00:00`) | **Duration** (number, 1–3600 s, 1 decimal, suffix ` s`, default 60) | **▶/■** preview.
    - **Selected track** (web only): clicking or focusing a row selects it; the first track is selected to begin with. With several tracks the selected row is highlighted. The Preview block's Track picker is the same selection.
    - **Snippet waveform** (web only, **deviation from desktop**): under the table, the selected track's waveform (named above it when there are several tracks) with its snippet, Start → `min(Start + Duration, end of file)`, as a region with a handle on each edge. Component `ui/components/Waveform.svelte`, shared with the Media Cutter ([05](05-media-cutter.md#waveform-clip-regions-web-only)); rules in `engine/clip-regions.ts`.
      - **Start handle** slides the snippet: Start = `formatTimestamp` of the position (whole seconds), at most 1 s before the end of the file; Duration is untouched.
@@ -19,7 +19,7 @@ The shared tool layout (spec [09 › Tool layout](09-app-shell-and-about.md#tool
      - **Dragging the snippet itself** (anywhere between the handles) slides it like the Start handle does.
      - Grab zones and grips are the Cutter's ([05](05-media-cutter.md#waveform-clip-regions-web-only)). The bubble on a dragged handle shows Start as a timestamp and End as the Duration (`{n} s`); dragging the snippet shows Start.
      - Handles are `role="slider"` named `Start of {file}` / `End of {file}`: ←/↓ and →/↑ move 1 s, with Shift 10 s. They don't move while a job runs. A Start that doesn't parse, or lies past the end of the file, has no region.
-     - Typing in the fields and ✨ move the region. The waveform is not a seek bar here (there is no whole-file player); the Preview slider seeks within the snippet.
+     - Typing in the fields moves the region. The waveform is not a seek bar here (there is no whole-file player); the Preview slider seeks within the snippet.
      - Peaks load for the selected track only (media Worker only, 1200 columns) and are kept for as long as the page holds the file, also while another tool is open. An empty box holds the waveform's place while they load; if the Worker can't decode the file there is no waveform.
    - Status line under the table (see Messages).
    - Table style: alternating rows, no grid, hidden row header, rounded 8 px border, bold header. Same style as the Media Cutter table.
@@ -40,7 +40,7 @@ The shared tool layout (spec [09 › Tool layout](09-app-shell-and-about.md#tool
    - **Overlay**: **Image** picker (png/jpg/jpeg/webp/tif/tiff).
 6. **Post-effects**
    - Checkbox "Mute original video sound" (default on). **Visible only when the visual is a video.**
-   - "Fade video in/out" (default on).
+   - "Fade video in/out" (default **off**; deviation from desktop, which defaults on).
    - "Fade audio in/out" (default on).
 
 Sections 4–6 show a quiet status: the enabled effect chain, the background (+ overlay), the fades; or `Choose audio and an image or video first`.
@@ -63,7 +63,6 @@ Sections 4–6 show a quiet status: the enabled effect chain, the background (+ 
 - *Track timings* appears when ≥1 audio file was found; its inputs are disabled while a job runs.
 - The controls in *Effects*, *Layers*, *Post-effects* and *Export* are enabled when audio and visual are both valid and no job is running.
 - While a job runs, every input is disabled and any preview stops.
-- During drop analysis, every ✨ button is disabled and Generate is blocked.
 
 ## Inputs
 
@@ -77,7 +76,7 @@ Sections 4–6 show a quiet status: the enabled effect chain, the background (+ 
 - **Decoding** (`engine/media/audio-decode.ts`, in `workers/media.worker.ts`):
   - Native sample rate, stereo-ised and 16-bit quantised like the desktop's FFmpeg step.
   - Mediabunny for WAV/MP3/AAC/M4A/FLAC/OGG, plus a TS reader for AIFF/AIFF-C (Mediabunny has no AIFF demuxer).
-  - If WebCodecs can't decode a codec, the client falls back to the main thread's `decodeAudioData`, resampled to 44.1 kHz. Drop times on that path can differ slightly.
+  - If WebCodecs can't decode a codec, the client falls back to the main thread's `decodeAudioData`, resampled to 44.1 kHz.
 - **Visual validation** (`io/visual.ts`):
   - Images: `createImageBitmap`.
   - Videos: Mediabunny's first frame via WebCodecs.
@@ -95,15 +94,11 @@ Sections 4–6 show a quiet status: the enabled effect chain, the background (+ 
   - Tooltip: `Listen from {start or 'the start time'} for {duration:g} seconds`.
   - Status: `Listening to {name} from {HH:MM:SS} for {duration:g} seconds.`
   - An invalid start shows a "Preview unavailable" alert with the parse error.
-  - Web: use an `AudioBufferSourceNode.start(0, start, duration)` on the decoded PCM. This is sample-accurate and works for every decodable format.
+  - Web: play the file in an `<audio>` element (`#t={start}`, stopped at `start + duration`), so playback starts at once without decoding. When the element can't play the format (e.g. AIFF outside Safari), decode the snippet in the media Worker and play it through an `AudioBufferSourceNode`.
 
-### Drop detection (✨ per row)
+### Drop detection (removed)
 
-1. The dialog **"Detect drop start"** says: *"MM Toolkit will analyze {track} and propose a start time based on its main drop."* Field **"Start before the drop"**: 0.0–60.0 s, step 0.5, 1 decimal, suffix ` seconds`. Defaults to the last value used (persisted `promo/drop_lead_in`, initial 2.0). Buttons: Cancel / **Analyze**.
-2. Running state: status `Analyzing {name} for its main drop…`. All ✨ disabled. Generate blocked with "wait for drop analysis".
-3. Success: set that row's Start to `formatTimestamp(max(0, drop − leadIn))`. This **rounds to whole seconds with banker's rounding**; see [10](10-file-io-and-naming.md#timestamps). Status: `✓ Proposed {HH:MM:SS} for {name}. You can edit or preview it.`
-4. Failure: `Drop detection failed: {message}. You can still enter the start manually.`
-5. Only one analysis may run at a time.
+**Deviation from desktop:** the web app has no ✨ drop detection. Analysing a whole track took too long in the browser; the start is typed or dragged on the waveform instead. The pure maths (`detectDropTime`, spec [02](02-audio-analysis.md)) stays in the engine with its golden tests, unused by the UI.
 
 ## Messages (exact strings, keep them)
 
@@ -113,8 +108,8 @@ Sections 4–6 show a quiet status: the enabled effect chain, the background (+ 
 | Audio status | path set, none found | `No audio files were found.` |
 | Visual status | ok | `✓ Image ready.` / `✓ Video ready.` |
 | Visual status | errors | `The image could not be found.` · `The selected file is not a supported image.` · `The selected artwork could not be read.` · `The video could not be found.` · `The selected video could not be read.` · `The selected file cannot be used as an image or video.` |
-| Timestamps status | tracks present, idle | `Edit start times manually or use ✨ to detect a drop for one track.` |
-| Requirements | missing items | `To enable Generate: ` + `; `-joined from [`choose audio`, `choose a valid image or video`, `choose a writable export folder`, `Track {n}: {parse error}`, `wait for drop analysis`] + `.` |
+| Timestamps status | tracks present, idle | `Edit start times manually or drag the snippet on the waveform.` (web wording; desktop mentions ✨) |
+| Requirements | missing items | `To enable Generate: ` + `; `-joined from [`choose audio`, `choose a valid image or video`, `choose a writable export folder`, `Track {n}: {parse error}`] + `.` |
 | Requirements | ready | `✓ Ready to generate videos.` |
 | Requirements | running | `Generating videos…` |
 | Generate button | 1 track / many | `Generate Video` / `Generate Videos` |
@@ -211,9 +206,8 @@ Saved when generation starts. Restored on load. Removed by **Clear**.
 | `music`, `cover`, `output` | file/folder references ([11](11-data-model-and-persistence.md)) |
 | `promo/video_fade`, `promo/audio_fade`, `promo/mute_original_video_audio` | bool |
 | `promo/effects_state` | effects JSON (schema in [11](11-data-model-and-persistence.md#effects-state)) |
-| `promo/drop_lead_in` | number (saved on Analyze; Clear does not reset it) |
 
-**Clear** resets: paths (export folder → Settings default), effects (default order and values), fades on, mute on, profile Visual native, fps 24, quality default, bitrate 320k, progress hidden.
+**Clear** resets: paths (export folder → Settings default), effects (default order and values), video fade off, audio fade on, mute on, profile Visual native, fps 24, quality default, bitrate 320k, progress hidden.
 
 ## History record (on success)
 

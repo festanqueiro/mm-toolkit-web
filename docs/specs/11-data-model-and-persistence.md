@@ -22,11 +22,10 @@ Desktop uses `QSettings("MM Toolkit", "MM Toolkit")`. The web app uses **Indexed
 | `music` | FileRef (file or dir) | — | Video Creator |
 | `cover` | FileRef | — | Video Creator |
 | `output` | FileRef (dir) | — | Video Creator |
-| `promo/video_fade` | bool | `true` | Video Creator |
+| `promo/video_fade` | bool | `false` (desktop: `true`) | Video Creator |
 | `promo/audio_fade` | bool | `true` | Video Creator |
 | `promo/mute_original_video_audio` | bool | `true` | Video Creator |
 | `promo/effects_state` | JSON string (below) | — | Video Creator |
-| `promo/drop_lead_in` | number | `2.0` | Video Creator |
 | `clips/source` | FileRef | — | Media Cutter |
 | `clips/output` | FileRef (dir) | — | Media Cutter |
 | `history/jobs` | (desktop: JSON array) | `[]` | → the `history` store on web |
