@@ -234,9 +234,15 @@ test("pausing the live preview keeps its position; at the end, play starts over"
   await expect(time).toHaveText("00:00:05", { timeout: 4000 });
   await page.getByRole("button", { name: "Pause preview", exact: true }).click();
   await expect(play).toBeVisible();
-  await expect(time).toHaveText(/00:00:0[56]/);
+  // A slow runner pauses a little later: what matters is that the position holds, and that
+  // Play carries on from it (starting over would take longer than the timeout to pass it).
+  const seconds = async () => Number((await time.textContent())!.split(":")[2]);
+  const paused = await seconds();
+  expect(paused).toBeGreaterThanOrEqual(5);
+  await page.waitForTimeout(600);
+  expect(await seconds()).toBe(paused);
   await play.click();
-  await expect(time).toHaveText("00:00:07", { timeout: 4000 });
+  await expect.poll(seconds, { timeout: 4000 }).toBeGreaterThan(paused);
 
   // Run to the end: the position stays there, and Play restarts the snippet.
   await page.getByLabel("Preview position").fill("9.5");
