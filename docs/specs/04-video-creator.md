@@ -20,7 +20,7 @@ The shared tool layout (spec [09 › Tool layout](09-app-shell-and-about.md#tool
      - Grab zones and grips are the Cutter's ([05](05-media-cutter.md#waveform-clip-regions-web-only)). The bubble on a dragged handle shows Start as a timestamp and End as the Duration (`{n} s`); dragging the snippet shows Start.
      - Handles are `role="slider"` named `Start of {file}` / `End of {file}`: ←/↓ and →/↑ move 1 s, with Shift 10 s. They don't move while a job runs. A Start that doesn't parse, or lies past the end of the file, has no region.
      - Typing in the fields moves the region. The waveform is not a seek bar here (there is no whole-file player); the Preview slider seeks within the snippet.
-     - Peaks load for the selected track only (media Worker only, 1200 columns) and are kept for as long as the page holds the file, also while another tool is open. An empty box holds the waveform's place while they load; if the Worker can't decode the file there is no waveform.
+     - Peaks load for the selected track only (media Worker only, 1200 columns) and are kept for as long as the page holds the file, also while another tool is open. A box with a progress bar (`Loading waveform… {n}%`, from the Worker's decode position) holds the waveform's place while they load; if the Worker can't decode the file there is no waveform.
    - Status line under the table (see Messages).
    - Table style: alternating rows, no grid, hidden row header, rounded 8 px border, bold header. Same style as the Media Cutter table.
 

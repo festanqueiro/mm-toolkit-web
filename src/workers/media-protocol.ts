@@ -19,6 +19,8 @@ export type MediaRequest = { [K in MediaOp]: { id: number; op: K; args: MediaOps
 
 export type MediaErrorKind = "unreadable" | "unsupported" | "empty" | "failed";
 
+/** `progress` (0–1) may come any number of times before the answer; only `peaks` reports it. */
 export type MediaResponse =
+  | { id: number; progress: number }
   | { id: number; ok: true; result: unknown }
   | { id: number; ok: false; error: { message: string; kind: MediaErrorKind } };

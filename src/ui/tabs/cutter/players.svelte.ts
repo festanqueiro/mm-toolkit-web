@@ -246,9 +246,9 @@ export class WaveformPlayer extends ClockPlayer {
   peaks = $state.raw<Float32Array | null>(null);
 
   /** Resolves once the waveform is ready; rejects when the audio can't be decoded at all. */
-  static async open(file: Blob, columns = 1200): Promise<WaveformPlayer> {
+  static async open(file: Blob, columns = 1200, onProgress?: (fraction: number) => void): Promise<WaveformPlayer> {
     const player = new WaveformPlayer(file);
-    const { peaks, duration } = await audioPeaks(file, columns);
+    const { peaks, duration } = await audioPeaks(file, columns, true, onProgress);
     player.peaks = peaks;
     player.duration = duration;
     return player;

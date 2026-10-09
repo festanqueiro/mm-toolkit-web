@@ -32,6 +32,7 @@
   import ClipTable from "./ClipTable.svelte";
   import { FramePlayer, NativePlayer, WaveformPlayer, type PreviewPlayer } from "./players.svelte";
   import Waveform from "../../components/Waveform.svelte";
+  import WaveformPending from "../../components/WaveformPending.svelte";
   import { cutter } from "./state.svelte";
 
   $effect(() => {
@@ -80,6 +81,8 @@
   /** Waveform peaks for audio the native element plays (the fallback player brings its own). */
   let nativePeaks = $state.raw<Float32Array | null>(null);
   let peaksFailed = $state(false);
+  /** How far the waveform's decode is (0–1; `null`: not known). */
+  let peaksProgress = $state<number | null>(null);
 
   const position = $derived(player?.position ?? 0);
   const duration = $derived(player?.duration ?? 0);
@@ -104,6 +107,7 @@
       fallback = "none";
       nativePeaks = null;
       peaksFailed = false;
+      peaksProgress = null;
     });
   });
 
@@ -116,7 +120,7 @@
     if (!source?.ok) return;
     const mine = token;
     try {
-      const { peaks } = await audioPeaks(source.file, 1200, false);
+      const { peaks } = await audioPeaks(source.file, 1200, false, (fraction) => mine === token && (peaksProgress = fraction));
       if (mine === token) nativePeaks = peaks;
     } catch {
       // No waveform; the fields and the timeline still work.
@@ -144,7 +148,7 @@
     player = null;
     fallback = "loading";
     try {
-      const next = kind === "video" ? await FramePlayer.open(source.file) : await WaveformPlayer.open(source.file);
+      const next = kind === "video" ? await FramePlayer.open(source.file) : await WaveformPlayer.open(source.file, 1200, (fraction) => mine === token && (peaksProgress = fraction));
       if (mine !== token) return next.destroy();
       player = next;
       fallback = "ready";
@@ -296,8 +300,7 @@
               onedge={moveEdge}
             />
           {:else if kind === "audio" && !peaksFailed && fallback !== "unavailable"}
-            <!-- Hold the waveform's space while it loads, so the controls below don't jump. -->
-            <div class="waveform-pending" data-testid="waveform-pending" aria-hidden="true"></div>
+            <WaveformPending progress={peaksProgress} />
           {/if}
         </div>
         {#if fallback === "loading"}
@@ -409,13 +412,6 @@
       order: -1;
       flex-basis: 100%;
     }
-  }
-  .waveform-pending {
-    height: 120px;
-    margin-top: 14px;
-    border-radius: var(--radius-sm);
-    background: var(--surface-sunken);
-    border: 1px solid var(--border);
   }
   .frames {
     display: block;

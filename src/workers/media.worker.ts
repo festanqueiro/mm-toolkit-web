@@ -7,7 +7,7 @@ import type { MediaRequest, MediaResponse } from "./media-protocol";
 
 const transferables = (pcm: PcmAudio) => [...new Set(pcm.channels.map((c) => c.buffer as ArrayBuffer))];
 
-async function handle(request: MediaRequest): Promise<{ result: unknown; transfer: Transferable[] }> {
+async function handle(request: MediaRequest, progress: (fraction: number) => void): Promise<{ result: unknown; transfer: Transferable[] }> {
   switch (request.op) {
     case "decode": {
       const pcm = await decodeAudio(request.args.file, request.args.range);
@@ -26,15 +26,21 @@ async function handle(request: MediaRequest): Promise<{ result: unknown; transfe
       let peaks: PeakAccumulator | null = null;
       let rate = 1;
       let last = 0;
+      let total = 0;
+      let reported = 0;
       await streamAudio(
         request.args.file,
         ({ sampleRate, frames }) => {
           rate = sampleRate;
+          total = frames;
           peaks = new PeakAccumulator(request.args.columns, frames);
         },
         (channels, offset) => {
           peaks!.add(channels, offset);
           last = Math.max(last, offset + (channels[0]?.length ?? 0));
+          // A message per percent at most.
+          const fraction = total > 0 ? Math.min(1, last / total) : 0;
+          if (fraction - reported >= 0.01) progress((reported = fraction));
         },
       );
       const result = (peaks as PeakAccumulator | null)?.peaks ?? new Float32Array(request.args.columns * 2);
@@ -46,7 +52,7 @@ async function handle(request: MediaRequest): Promise<{ result: unknown; transfe
 self.onmessage = async (event: MessageEvent<MediaRequest>) => {
   const { id } = event.data;
   try {
-    const { result, transfer } = await handle(event.data);
+    const { result, transfer } = await handle(event.data, (progress) => self.postMessage({ id, progress } satisfies MediaResponse));
     self.postMessage({ id, ok: true, result } satisfies MediaResponse, { transfer });
   } catch (error) {
     const kind = error instanceof AudioDecodeError ? error.kind : "failed";

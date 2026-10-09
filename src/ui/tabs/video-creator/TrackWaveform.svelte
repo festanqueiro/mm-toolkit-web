@@ -8,6 +8,7 @@
   import { formatTimestamp } from "../../../engine/time";
   import { audioPeaks } from "../../../workers/media-client";
   import Waveform from "../../components/Waveform.svelte";
+  import WaveformPending from "../../components/WaveformPending.svelte";
   import { vc } from "./state.svelte";
 
   type Peaks = { peaks: Float32Array; duration: number };
@@ -15,19 +16,26 @@
   const row = $derived(vc.selectedRow);
   /** Peaks per track, kept so going back to a track doesn't decode it again (`null`: no waveform for it). */
   const cache = new SvelteMap<string, Peaks | "loading" | null>();
+  /** How far each loading track's decode is (0–1). */
+  const progress = new SvelteMap<string, number>();
 
   $effect(() => {
     const key = row?.key;
     const file = key ? vc.fileFor(key) : undefined;
     // Forget tracks that are no longer listed.
-    for (const cached of [...cache.keys()]) if (!vc.rows.some((r) => r.key === cached)) cache.delete(cached);
+    for (const cached of [...cache.keys()]) {
+      if (vc.rows.some((r) => r.key === cached)) continue;
+      cache.delete(cached);
+      progress.delete(cached);
+    }
     if (!key || !file || cache.has(key)) return;
     cache.set(key, "loading");
     // Worker only: without a decoder there, the whole file would be decoded on the page (spec 05).
-    audioPeaks(file, 1200, false)
+    audioPeaks(file, 1200, false, (fraction) => cache.get(key) === "loading" && progress.set(key, fraction))
       .catch(() => null)
       .then((peaks) => {
         if (cache.get(key) === "loading") cache.set(key, peaks);
+        progress.delete(key);
       });
   });
 
@@ -59,8 +67,7 @@
         edgeText={(edge, seconds) => (edge === "end" ? `${row.duration} s` : formatTimestamp(seconds))}
       />
     {:else}
-      <!-- Hold the waveform's space while it loads, so the controls below don't jump. -->
-      <div class="pending" aria-hidden="true"></div>
+      <WaveformPending progress={progress.get(row.key) ?? null} />
     {/if}
   </div>
 {/if}
@@ -72,12 +79,5 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-  .pending {
-    height: 120px;
-    margin-top: 14px;
-    border-radius: var(--radius-sm);
-    background: var(--surface-sunken);
-    border: 1px solid var(--border);
   }
 </style>
