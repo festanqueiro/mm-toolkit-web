@@ -4,8 +4,6 @@ import type { DecodeRange, PcmAudio } from "../engine/media/audio-decode";
 export type MediaOps = {
   /** Decode (part of) a file to normalised stereo PCM. */
   decode: { args: { file: Blob; range?: DecodeRange }; result: PcmAudio };
-  /** `detect_drop_time` on the whole track; seconds. */
-  detectDrop: { args: { file: Blob }; result: number };
   /**
    * Bass envelope of the snippet `[range.start, range.start + range.duration)` at `fps`
    * (`_build_bass_envelope`), plus the snippet's actual duration (clamped to the track end).
@@ -13,8 +11,6 @@ export type MediaOps = {
   bassEnvelope: { args: { file: Blob; range: DecodeRange; fps: number }; result: { envelope: Float64Array; duration: number } };
   /** Waveform: min/max of the mono mix in `columns` columns (interleaved), plus the duration in seconds. */
   peaks: { args: { file: Blob; columns: number }; result: { peaks: Float32Array; duration: number } };
-  /** Same, on PCM the main thread decoded (fallback for codecs the Worker can't decode). */
-  detectDropPcm: { args: { pcm: PcmAudio }; result: number };
 };
 
 export type MediaOp = keyof MediaOps;

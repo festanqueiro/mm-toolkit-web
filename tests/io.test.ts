@@ -28,7 +28,7 @@ describe("settings storage", () => {
     expect(SETTING_DEFAULTS["general/promo_naming"]).toBe("{track} - Promo Snippet");
     expect(SETTING_DEFAULTS["general/clip_naming"]).toBe("{source} - {title}");
     expect(SETTING_DEFAULTS["general/conflict_policy"]).toBe("rename");
-    expect(SETTING_DEFAULTS["promo/drop_lead_in"]).toBe(2);
+    expect(SETTING_DEFAULTS["promo/video_fade"]).toBe(false);
   });
   it("persists values across loads", async () => {
     await saveSetting("general/conflict_policy", "skip");

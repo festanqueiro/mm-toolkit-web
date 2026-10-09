@@ -21,7 +21,7 @@
 - Desktop sizing: min 820×620, default 1100×820. Web: responsive. Two-column tool layouts collapse to one column below ~900 px.
 - Page padding 28/24 px. Section spacing 10–14 px. Primary action buttons are at least 44 px tall.
 - **Theme**: follow `prefers-color-scheme` by default (desktop follows the OS palette). Colour tokens are defined once.
-- **Leaving during a job**: desktop blocks closing with "Rendering in progress — Wait for rendering to finish before closing the app." Web: a `beforeunload` prompt while any job or drop analysis is running. Also request a **Screen Wake Lock** while jobs run (where supported).
+- **Leaving during a job**: desktop blocks closing with "Rendering in progress — Wait for rendering to finish before closing the app." Web: a `beforeunload` prompt while any job is running. Also request a **Screen Wake Lock** while jobs run (where supported).
 - **Status conventions**: positive states start with `✓ `. "Requirements" text always explains why the primary button is disabled (`To enable X: a; b; c.`).
 - **Error dialogs**: a title, a short message, and expandable **details** (stack/log). This mirrors desktop `show_error`.
 

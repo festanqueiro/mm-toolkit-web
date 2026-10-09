@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
 /** Decoding and audio analysis, kept off the UI thread (spec 01). */
-import { buildBassEnvelope, detectDropTime, toMono } from "../engine/analysis/drop";
+import { buildBassEnvelope, toMono } from "../engine/analysis/drop";
 import { PeakAccumulator } from "../engine/analysis/peaks";
 import { AudioDecodeError, decodeAudio, streamAudio, type PcmAudio } from "../engine/media/audio-decode";
 import type { MediaRequest, MediaResponse } from "./media-protocol";
@@ -14,10 +14,6 @@ async function handle(request: MediaRequest): Promise<{ result: unknown; transfe
       // Stereo-ised mono shares one buffer; copy so both planes can be transferred.
       if (pcm.channels[0] === pcm.channels[1]) pcm.channels[1] = pcm.channels[0]!.slice();
       return { result: pcm, transfer: transferables(pcm) };
-    }
-    case "detectDrop": {
-      const pcm = await decodeAudio(request.args.file);
-      return { result: detectDropTime(toMono(pcm.channels), pcm.sampleRate), transfer: [] };
     }
     case "bassEnvelope": {
       const { file, range, fps } = request.args;
@@ -43,10 +39,6 @@ async function handle(request: MediaRequest): Promise<{ result: unknown; transfe
       );
       const result = (peaks as PeakAccumulator | null)?.peaks ?? new Float32Array(request.args.columns * 2);
       return { result: { peaks: result, duration: last / rate }, transfer: [result.buffer] };
-    }
-    case "detectDropPcm": {
-      const { pcm } = request.args;
-      return { result: detectDropTime(toMono(pcm.channels), pcm.sampleRate), transfer: [] };
     }
   }
 }

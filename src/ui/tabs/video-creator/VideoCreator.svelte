@@ -2,7 +2,6 @@
   import { IMAGE_EXTENSIONS, AUDIO_EXTENSIONS, VIDEO_EXTENSIONS } from "../../../engine/media-kind";
   import {
     audioStatus,
-    dropDialogMessage,
     generateLabel,
     hexColor,
     requirements,
@@ -36,7 +35,7 @@
 
   // Desktop blocks closing while rendering; the web asks before leaving the page.
   $effect(() => {
-    if (!vc.running && vc.analysingKey === null) return;
+    if (!vc.running) return;
     const guard = (event: BeforeUnloadEvent) => event.preventDefault();
     window.addEventListener("beforeunload", guard);
     return () => window.removeEventListener("beforeunload", guard);
@@ -62,7 +61,6 @@
       visualOk,
       outputOk,
       trackError: tracks.error,
-      analysing: vc.analysingKey !== null,
       running: vc.running,
     }),
   );
@@ -85,22 +83,6 @@
   async function dropVisual(transfer: DataTransfer) {
     const file = transfer.files[0];
     if (file) await vc.setVisual(file);
-  }
-
-  // ---- Drop detection dialog ----
-  let dropDialogOpen = $state(false);
-  let dropKey = $state<string | null>(null);
-  let leadIn = $state(2);
-  function openDropDialog(key: string) {
-    if (vc.analysingKey) return;
-    dropKey = key;
-    leadIn = vc.leadIn;
-    dropDialogOpen = true;
-  }
-  function analyse() {
-    const value = Math.min(60, Math.max(0, Math.round((Number(leadIn) || 0) * 10) / 10));
-    dropDialogOpen = false;
-    if (dropKey) void vc.detectDrop(dropKey, value);
   }
 
   // ---- Section statuses ----
@@ -165,7 +147,7 @@
 
     {#if vc.rows.length}
       <SetupSection title="Track timings" status={trackWord}>
-        <TrackTable ondetect={openDropDialog} onpreview={preview} />
+        <TrackTable onpreview={preview} />
         <TrackWaveform />
         {#if vc.timestampsStatus}
           <p class="status" data-testid="timestamps-status" aria-live="polite">{vc.timestampsStatus}</p>
@@ -223,21 +205,6 @@
   {/snippet}
 </ToolLayout>
 
-<Modal title="Detect drop start" bind:open={dropDialogOpen}>
-  <p>{dropDialogMessage(dropKey ? (vc.fileFor(dropKey)?.name ?? "") : "")}</p>
-  <label class="lead-in">
-    Start before the drop
-    <span class="row">
-      <input class="input" type="number" min="0" max="60" step="0.5" bind:value={leadIn} />
-      seconds
-    </span>
-  </label>
-  {#snippet actions()}
-    <button type="button" class="btn" onclick={() => (dropDialogOpen = false)}>Cancel</button>
-    <button type="button" class="btn primary" onclick={analyse}>Analyze</button>
-  {/snippet}
-</Modal>
-
 <Modal title="Preview unavailable" open={previewError !== null} onclose={() => (previewError = null)}>
   <p>{previewError}</p>
   {#snippet actions()}
@@ -260,12 +227,6 @@
     max-width: 100%;
     max-height: 100%;
   }
-  .row {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-    align-items: center;
-  }
   .post {
     display: grid;
     gap: 10px;
@@ -274,16 +235,5 @@
     display: flex;
     gap: 8px;
     align-items: center;
-  }
-  .lead-in {
-    display: grid;
-    gap: 6px;
-    font-weight: 600;
-  }
-  .lead-in .row {
-    font-weight: 400;
-  }
-  .lead-in .input {
-    width: 100px;
   }
 </style>

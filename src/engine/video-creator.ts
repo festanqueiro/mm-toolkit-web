@@ -90,7 +90,6 @@ export type RequirementState = {
   visualOk: boolean;
   outputOk: boolean;
   trackError: string | null;
-  analysing: boolean;
   running: boolean;
 };
 
@@ -103,7 +102,6 @@ export function requirements(state: RequirementState): { ready: boolean; message
   if (!state.visualOk) missing.push("choose a valid image or video");
   if (!state.outputOk) missing.push("choose a writable export folder");
   if (musicOk && state.trackError) missing.push(state.trackError.replace(/\.+$/, ""));
-  if (state.analysing) missing.push("wait for drop analysis");
   if (missing.length) return { ready: false, message: `To enable Generate: ${missing.join("; ")}.` };
   return { ready: true, message: "✓ Ready to generate videos." };
 }
@@ -148,17 +146,7 @@ export const previewTooltip = (row: Pick<TrackRow, "start" | "duration">) =>
 export const previewStatus = (name: string, start: number, duration: number) =>
   `Listening to ${name} from ${formatTimestamp(start)} for ${formatG(duration)} seconds.`;
 
-export const TIMESTAMPS_HINT = "Edit start times manually or use ✨ to detect a drop for one track.";
-
-export const dropDialogMessage = (track: string) =>
-  `MM Toolkit will analyze ${track} and propose a start time based on its main drop.`;
-export const dropAnalysingStatus = (name: string) => `Analyzing ${name} for its main drop…`;
-export const dropProposedStatus = (name: string, start: number) =>
-  `✓ Proposed ${formatTimestamp(start)} for ${name}. You can edit or preview it.`;
-export const dropFailedStatus = (message: string) => `Drop detection failed: ${message}. You can still enter the start manually.`;
-
-/** Proposed start for a detected drop: `max(0, drop − leadIn)`, shown via `formatTimestamp`. */
-export const proposedStart = (drop: number, leadIn: number) => Math.max(0, drop - leadIn);
+export const TIMESTAMPS_HINT = "Edit start times manually or drag the snippet on the waveform.";
 
 // ------------------------------------------------------------------ Output (spec 04)
 

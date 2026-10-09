@@ -52,7 +52,7 @@ Feature availability is decided by **runtime capability detection**, never by us
 | **Promo / promo snippet** | A short video made by Video Creator from one audio track (default name `{track} - Promo Snippet`). History records use tool key `"promo"`. |
 | **Visual** | The image or video that forms the picture of a promo. Desktop UI label: "Image or video". |
 | **Drop** | The moment a track's bass energy jumps most (see [02](02-audio-analysis.md)). |
-| **Lead-in** | Seconds to start before the detected drop. Default 2.0. |
+| **Lead-in** | Seconds to start before the detected drop. Default 2.0. Desktop only: the web app has no drop detection UI ([04](04-video-creator.md)). |
 | **Cascade** | The ordered list of visual effects applied per frame. |
 | **Layers** | Background fill (solid colour or image) and Overlay image. |
 | **WebCodecs path / WASM path** | Native browser codecs vs. the ffmpeg.wasm fallback. |
