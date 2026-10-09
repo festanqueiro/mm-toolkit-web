@@ -15,7 +15,7 @@ export class MediaError extends Error {
  * Two workers: a waveform decodes a whole file, and a snippet asked for meanwhile (a preview
  * the user is waiting on) mustn't queue behind it.
  */
-type Lane = { name: string; worker: Worker | null; pending: Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }> };
+type Lane = { name: string; worker: Worker | null; pending: Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void; progress?: (fraction: number) => void }> };
 const lanes = { main: { name: "media", worker: null, pending: new Map() } as Lane, peaks: { name: "media-peaks", worker: null, pending: new Map() } as Lane };
 let nextId = 1;
 
@@ -27,6 +27,7 @@ function getWorker(lane: Lane): Worker {
     const response = event.data;
     const entry = lane.pending.get(response.id);
     if (!entry) return;
+    if ("progress" in response) return entry.progress?.(response.progress);
     lane.pending.delete(response.id);
     if (response.ok) entry.resolve(response.result);
     else entry.reject(new MediaError(response.error.message, response.error.kind));
@@ -41,11 +42,11 @@ function getWorker(lane: Lane): Worker {
   return worker;
 }
 
-function call<K extends MediaOp>(op: K, args: MediaOps[K]["args"], transfer: Transferable[] = []): Promise<MediaOps[K]["result"]> {
+function call<K extends MediaOp>(op: K, args: MediaOps[K]["args"], transfer: Transferable[] = [], progress?: (fraction: number) => void): Promise<MediaOps[K]["result"]> {
   const id = nextId++;
   const lane = op === "peaks" ? lanes.peaks : lanes.main;
   return new Promise((resolve, reject) => {
-    lane.pending.set(id, { resolve: resolve as (value: unknown) => void, reject });
+    lane.pending.set(id, { resolve: resolve as (value: unknown) => void, reject, progress });
     getWorker(lane).postMessage({ id, op, args }, { transfer });
   });
 }
@@ -86,12 +87,13 @@ export function bassEnvelope(file: Blob, range: DecodeRange, fps: number): Promi
 }
 
 type Peaks = { peaks: Float32Array; duration: number };
+type PeaksEntry = { promise: Promise<Peaks>; done: boolean; progress: number; listeners: Set<(fraction: number) => void> };
 /** Waveforms already worked out, per file: leaving a tool and coming back mustn't decode an hour of audio again. */
-const peaksByFile = new WeakMap<Blob, Map<string, Promise<Peaks>>>();
+const peaksByFile = new WeakMap<Blob, Map<string, PeaksEntry>>();
 
-async function computePeaks(file: Blob, columns: number, webAudio: boolean): Promise<Peaks> {
+async function computePeaks(file: Blob, columns: number, webAudio: boolean, progress: (fraction: number) => void): Promise<Peaks> {
   try {
-    return await call("peaks", { file, columns });
+    return await call("peaks", { file, columns }, [], progress);
   } catch (error) {
     if (!webAudio || !unsupported(error)) throw error;
     const pcm = await decodeWithWebAudio(file);
@@ -105,20 +107,37 @@ async function computePeaks(file: Blob, columns: number, webAudio: boolean): Pro
 /**
  * Waveform peaks for a timeline, kept for as long as the file is (treat them as read-only).
  * Web Audio decodes codecs the Worker can't, but it holds the whole file decoded: pass
- * `webAudio: false` where that isn't worth it.
+ * `webAudio: false` where that isn't worth it. `onProgress` gets how far the decode is (0–1)
+ * while it runs, also when it joins one already under way.
  */
-export function audioPeaks(file: Blob, columns: number, webAudio = true): Promise<Peaks> {
+export function audioPeaks(file: Blob, columns: number, webAudio = true, onProgress?: (fraction: number) => void): Promise<Peaks> {
   let known = peaksByFile.get(file);
   if (!known) peaksByFile.set(file, (known = new Map()));
   const key = `${columns}|${webAudio}`;
-  let peaks = known.get(key);
-  if (!peaks) {
-    peaks = computePeaks(file, columns, webAudio);
-    known.set(key, peaks);
+  let entry = known.get(key);
+  if (!entry) {
+    const created: PeaksEntry = { promise: null!, done: false, progress: 0, listeners: new Set() };
+    created.promise = computePeaks(file, columns, webAudio, (fraction) => {
+      created.progress = fraction;
+      for (const listener of created.listeners) listener(fraction);
+    });
+    const finish = () => {
+      created.done = true;
+      created.listeners.clear();
+      return true;
+    };
+    known.set(key, (entry = created));
     // A failure isn't kept: the next request tries again.
-    peaks.catch(() => known.get(key) === peaks && known.delete(key));
+    created.promise.then(
+      () => finish(),
+      () => finish() && known.get(key) === created && known.delete(key),
+    );
   }
-  return peaks;
+  if (onProgress && !entry.done) {
+    entry.listeners.add(onProgress);
+    if (entry.progress > 0) onProgress(entry.progress);
+  }
+  return entry.promise;
 }
 
 /**
